@@ -6,10 +6,12 @@
 <find_request> ::= "find_request" <request_id>
 <remove_request> ::= "remove_request" <request_id>
 <update_request> ::= "update_request" <request>
-<request> ::= "Request" <request> <request_id> <request_type> <request_origin>
+<request> ::= "Request" <request_id> <request_type> <request_origin> <items>
 <request_id> ::= <string>
 <request_type> ::= "Request type:" <string>
 <request_origin> ::= "Request origin:" <string>
+<items> ::= <items> | <items> <item>
+<item> ::= <string>
 <string> ::= <any sequence of characters>
 <integer> ::= <sequence of digits>
 <quit> ::= "quit"
