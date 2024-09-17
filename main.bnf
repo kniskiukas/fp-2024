@@ -1,15 +1,16 @@
-<command> ::= <add_car> | <list_cars> | <find_car> | <remove_car> | <update_car> | <quit>
-<add_car> ::= "add_car" <car>
-<list_cars> ::= "list_cars"
-<find_car> ::= "find_car" <car_id>
-<remove_car> ::= "remove_car" <car_id>
-<update_car> ::= "update_car" <car>
-<car> ::= "Car" <car_id> <model> <year> <color> <fuel_type>
-<car_id> ::= <string>
-<fuel_type> ::= "Fuel Type:" <string>
-<model> ::= "Model:" <string>
-<year> ::= "Year:" <integer>
-<color> ::= "Color:" <string>
+--change to restaurant requests
+
+<command> ::= <add_request> | <list_requests> | <find_request> | <remove_request> | <update_request> | <quit>
+<add_request> ::= "add_request" <request>
+<list_requests> ::= "list_requests"
+<find_request> ::= "find_request" <request_id>
+<remove_request> ::= "remove_request" <request_id>
+<update_request> ::= "update_request" <request>
+<request> ::= "Request" <request> <request_id> <request_type> <request_origin>
+<request_id> ::= <string>
+<request_type> ::= "Request type:" <string>
+<request_origin> ::= "Request origin:" <string>
 <string> ::= <any sequence of characters>
 <integer> ::= <sequence of digits>
 <quit> ::= "quit"
+`

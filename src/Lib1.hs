@@ -7,30 +7,20 @@ module Lib1
 completions :: [String]
 completions = [
     -- actions
-    "addCar",
-    "removeCar",
-    "listCars",
-    "findCar",
-    "updateCar",
+    "addRequest",
+    "removeRequest",
+    "listRequests",
+    "findRequest",
+    "updateRequest",
     "quit",
-    -- colors
-    "red",
-    "blue",
-    "green",
-    "yellow",
-    "black",
-    "white",
-    -- fuel types
-    "gasoline",
-    "diesel",
-    "electric",
-    "hybrid",
-    -- models
-    "sedan",
-    "coupe",
-    "convertible",
-    "hatchback",
-    "suv",
-    "truck",
-    "van"
+    -- request type
+    "drink",
+    "appetizer",
+    "main",
+    "desert",
+    -- request origin
+    "table",
+    "bar",
+    "online",
+    "waiter"
     ]
