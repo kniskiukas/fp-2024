@@ -10,7 +10,7 @@
 <request_id> ::= <string>
 <request_type> ::= "Request type:" <string>
 <request_origin> ::= "Request origin:" <string>
-<items> ::= <item> | <item> <items>
+<items> ::= <item> | <item> "," <items>
 <item> ::= <string>
 <string> ::= <any sequence of characters>
 <integer> ::= <sequence of digits>
