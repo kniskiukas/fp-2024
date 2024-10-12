@@ -1,17 +1,19 @@
 --change to restaurant requests
 
 <command> ::= <add_request> | <list_requests> | <find_request> | <remove_request> | <update_request> | <quit>
-<add_request> ::= "add_request" <request>
-<list_requests> ::= "list_requests"
-<find_request> ::= "find_request" <request_id>
-<remove_request> ::= "remove_request" <request_id>
-<update_request> ::= "update_request" <request>
-<request> ::= "Request" <request_id> <request_type> <request_origin> <items>
+<
+<add_request> ::= "add_request " <request>
+<list_requests> ::= "list_requests "
+<find_request> ::= "find_request " <request_id>
+<remove_request> ::= "remove_request " <request_id>
+<update_request> ::= "update_request " <request>
+<request> ::= "Request " <request_id> "," <request_type> "," <request_origin> "," <items>
 <request_id> ::= <string>
-<request_type> ::= "Request type:" <string>
-<request_origin> ::= "Request origin:" <string>
-<items> ::= <item> | <item> "," <items>
+<request_type> ::= "Request type: " <string>
+<request_origin> ::= "Request origin: " <string>
+<items> ::= <item> | <item> ", " <items>
 <item> ::= <string>
-<string> ::= <any sequence of characters>
+<string> ::= <char> | <char> <string>
+<char> ::= <a..z,A..Z>
 <integer> ::= <sequence of digits>
 <quit> ::= "quit"
