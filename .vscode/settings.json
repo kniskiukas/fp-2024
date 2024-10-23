@@ -1,4 +1,5 @@
 {
     "haskell.upgradeGHCup": false,
-    "haskell.manageHLS": "GHCup"
+    "haskell.manageHLS": "GHCup",
+    "haskell.serverExecutablePath": "C:/hls"
 }

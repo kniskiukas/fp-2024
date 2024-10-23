@@ -17,7 +17,7 @@ module Lib2
 
     ) where
 
--- | An entity which represets user input.
+-- | An entity which represents user input.
 -- It should match the grammar from Laboratory work #1.
 -- Currently it has no constructors but you can introduce
 -- as many as needed.
@@ -28,28 +28,37 @@ type Parser a = String -> Either String (a, String)
 
 --basic parsers
 
+-- <char> ::= <a..z,A..Z>
+
 parseChar :: Char -> Parser Char
 parseChar _ [] = Left "Cannot find character in an empty input"
 parseChar c s@(h : t) = if c == h then Right (c, t) else Left ("Expected '" ++ [c] ++ "' but found '" ++ [h] ++ "' in " ++ s)
 
-parseLetter :: Parser Char
-parseLetter [] = Left "Cannot find any letter in an empty input"
-parseLetter s@(h : t) = if C.isLetter h then Right (h, t) else Left (s ++ " does not start with a letter")
+-- parseLetter :: Parser Char
+-- parseLetter [] = Left "Cannot find any letter in an empty input"
+-- parseLetter s@(h : t) = if C.isLetter h then Right (h, t) else Left (s ++ " does not start with a letter")
 
 parseSpace :: Parser Char
 parseSpace = parseChar ' '
+
+parseComma :: Parser Char
+parseComma = parseChar ','
+
+-- <integer> ::= <sequence of digits>
 
 parseDigit :: Parser Char
 parseDigit [] = Left "Cannot find any digits in an empty input"
 parseDigit s@(h : t) = if C.isDigit h then Right (h, t) else Left (s ++ " does not start with a digit")
 
+-- <string> ::= <char> | <char> <string>
+
 parseString :: String -> Parser String
 parseString [] s = Right ([], s)  
 parseString (c:cs) s = case parseChar c s of
+  Left err -> Left err
+  Right (_, rest) -> case parseString cs rest of
     Left err -> Left err
-    Right (_, rest) -> case parseString cs rest of
-        Left err -> Left err
-        Right (v2, r2) -> Right (c:v2, r2)
+    Right (v2, r2) -> Right (c:v2, r2)
 
 --helper parsers
 
@@ -80,31 +89,53 @@ and4 f p1 p2 p3 p4 s = case p1 s of
         Left err -> Left err
         Right (v4, r4) -> Right (f v1 v2 v3 v4, r4)
 
-orX :: [Parser a] -> Parser a
-orX [] _ = Left "No parser matched"
-orX (p : ps) s = case p s of
-  Left _ -> orX ps s
-  Right res -> Right res
-
-many1 :: Parser a -> Parser [a]
-many1 p s = case p s of
+and7 :: (a -> b -> c -> d -> e -> f -> g -> h) -> Parser a -> Parser b -> Parser c -> Parser d -> Parser e -> Parser f -> Parser g -> Parser h
+and7 f p1 p2 p3 p4 p5 p6 p7 s = case p1 s of
   Left err -> Left err
-  Right (v1, r1) -> case many1' r1 of
-    (v2, r2) -> Right (v1:v2, r2)
-  where
-    many1' s2 = case p s2 of
-      Left _ -> ([], s2)
-      Right (v2, r2) -> let (vs, r3) = many1' r2 in (v2 : vs, r3)
-
-parseWord :: Parser String
-parseWord [] = Left "Cannot find any word in an empty input"
-parseWord s = case parseLetter s of
+  Right (v1, r1) -> case p2 r1 of
     Left err -> Left err
-    Right (v1, r1) -> case parseString v1 r1 of
+    Right (v2, r2) -> case p3 r2 of
+      Left err -> Left err
+      Right (v3, r3) -> case p4 r3 of
         Left err -> Left err
-        Right (v2, r2) -> Right (v1 ++ v2, r2)
+        Right (v4, r4) -> case p5 r4 of
+          Left err -> Left err
+          Right (v5, r5) -> case p6 r5 of
+            Left err -> Left err
+            Right (v6, r6) -> case p7 r6 of
+              Left err -> Left err
+              Right (v7, r7) -> Right (f v1 v2 v3 v4 v5 v6 v7, r7)
+
+-- orX :: [Parser a] -> Parser a
+-- orX [] _ = Left "No parser matched"
+-- orX (p : ps) s = case p s of
+--   Left _ -> orX ps s
+--   Right res -> Right res
+
+-- many1 :: Parser a -> Parser [a]
+-- many1 p s = case p s of
+--   Left err -> Left err
+--   Right (v1, r1) -> case many1' r1 of
+--     (v2, r2) -> Right (v1:v2, r2)
+--   where
+--     many1' s2 = case p s2 of
+--       Left _ -> ([], s2)
+--       Right (v2, r2) -> let (vs, r3) = many1' r2 in (v2 : vs, r3)
 
 --needed parsers
+
+-- <items> ::= <item> | <item> ", " <items>
+
+parseItems :: Parser Items
+parseItems = or2 (and3 parseString parseComma parseItems) parseString 
+
+-- <request> ::= <request_id> "," <request_type> "," <request_origin> "," <items>
+
+parseRequest :: Parser RequestInfo
+
+parseRequest = and7 parseDigit parseComma parseString parseComma parseString parseComma parseItems
+
+
 
 
 
@@ -119,15 +150,14 @@ data Query =
   | FindRequest String
   deriving (Eq, Show)
 
-  data RequestInfo = RequestInfo request_id request_type request_origin items 
+  data Request = Request RequestId RequestType RequestOrigin Items 
   deriving (Eq, Show)
-  type request_id = Int
-  data request_type = Drink | Main | Dessert | Snack | Other
+  type RequestId = Int
+  data RequestType = String
   deriving (Eq, Show)
-  data request_origin = Table | Waiter | Bar | Kitchen | Delivery | Takeaway | Online
+  data RequestOrigin = String
   deriving (Eq, Show)
-  type items = [item]
-  type item = String
+  type Items = [String]
   deriving (Eq, Show)
 
 -- | The instances are needed basically for tests
@@ -153,58 +183,29 @@ parseQuery _ = Left "Not implemented 2"
 -- <remove_request> ::= "remove_request " <request_id>
 -- <update_request> ::= "update_request " <request>
 
-parseRequestInfo :: Parser RequestInfo
-parseRequestInfo input = 
-  case parseRequestId input of
-    Left err -> Left err
-    Right (id, r1) -> case parseSpace r1 of
-      Left err -> Left err
-      Right (type, r2) -> case parseRequestType r2 of
-        Left err -> Left err
-        Right (origin, r3) -> case parseSpace r3 of
-          Left err -> Left err
-          Right (items, r4) -> case parseItems r4 of
-            Left err -> Left err
-            Right (items, r5) -> Right (RequestInfo id type origin items, r5)
+parseCommand :: Parser Query
+parseCommand = or2 parseAddRequest (or2 parseListRequests (or2 parseRemoveRequest (or2 parseUpdateRequest parseFindRequest)))
 
-parseRequestType :: Parser request_type
--- <request_type> ::= <string>
-parseRequestType s = case parseWord s of
-    Left err -> Left err
-    Right ("Drink", r) -> Right (Drink, r)
-    Right ("Main", r) -> Right (Main, r)
-    Right ("Dessert", r) -> Right (Dessert, r)
-    Right ("Snack", r) -> Right (Snack, r)
-    Right ("Other", r) -> Right (Other, r)
-    Right (v, _) -> Left (v ++ " is not a valid request type")
+parseAddRequest :: Parser Query
+parseAddRequest = and3 parseString parseSpace parseRequest
 
--- <request_id> ::= <int>
-parseRequestId :: Parser request_id
+parseListRequests :: Parser Query
+parseListRequests = parseString "list_requests"
 
-parseRequestId s = case parseDigit s of
-    Left err -> Left err
-    Right (v, r) -> Right (read [v], r)
+parseRemoveRequest :: Parser Query
+parseRemoveRequest = and3 parseString parseSpace parseDigit
 
--- <request_origin> ::= <string>
-parseRequestOrigin :: Parser request_origin
-parseRequestOrigin s = case parseWord s of
-    Left err -> Left err
-    Right ("Table", r) -> Right (Table, r)
-    Right ("Waiter", r) -> Right (Waiter, r)
-    Right ("Bar", r) -> Right (Bar, r)
-    Right ("Kitchen", r) -> Right (Kitchen, r)
-    Right ("Delivery", r) -> Right (Delivery, r)
-    Right ("Takeaway", r) -> Right (Takeaway, r)
-    Right ("Online", r) -> Right (Online, r)
-    Right (v, _) -> Left (v ++ " is not a valid request origin")
+parseUpdateRequest :: Parser Query
+parseUpdateRequest = and5 parseString parseSpace parseDigit parseSpace parseRequest
 
-parseItem :: Parser item
-parseItem s = case parseWord s of
-    Left err -> Left err
-    Right (v, r) -> Right (v, r)
+parseFindRequest :: Parser Query
+parseFindRequest = and3 parseString parseSpace parseDigit
 
-parseItems :: Parser items
-parseItems = many1 parseItem
+
+
+
+
+
 
 -- | An entity which represents your program's state.
 -- Currently it has no constructors but you can introduce
@@ -231,3 +232,27 @@ stateTransition :: State -> Query -> Either String (Maybe String, State)
 stateTransition _ _ = Left "Not implemented 3"
 
 
+
+
+-- ideas
+-- request type parsing cases
+-- case parseWord s of
+--     Left err -> Left err
+--     Right ("Drink", r) -> Right (Drink, r)
+--     Right ("Main", r) -> Right (Main, r)
+--     Right ("Dessert", r) -> Right (Dessert, r)
+--     Right ("Snack", r) -> Right (Snack, r)
+--     Right ("Other", r) -> Right (Other, r)
+--     Right (v, _) -> Left (v ++ " is not a valid request type")
+
+-- request origin parsing cases
+-- case parseWord s of
+--     Left err -> Left err
+--     Right ("Table", r) -> Right (Table, r)
+--     Right ("Waiter", r) -> Right (Waiter, r)
+--     Right ("Bar", r) -> Right (Bar, r)
+--     Right ("Kitchen", r) -> Right (Kitchen, r)
+--     Right ("Delivery", r) -> Right (Delivery, r)
+--     Right ("Takeaway", r) -> Right (Takeaway, r)
+--     Right ("Online", r) -> Right (Online, r)
+--     Right (v, _) -> Left (v ++ " is not a valid request origin")
