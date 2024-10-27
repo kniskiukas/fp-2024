@@ -26,32 +26,36 @@ module Lib2
 
 
 import qualified Data.Char as C
+import qualified Data.List as L
 
 type Parser a = String -> Either String (a, String)
 
+-- parseItems :: Parser Items
+-- parseItems = or2 (and3 parseManyLetters parseComma parseItems) parseManyLetters
 parseItems :: Parser Items
-parseItems = or2 and3 parseString parseComma parseItems parseString 
+parseItems = or2 (and3                                                                  parseManyLetters parseComma     parseItems)    parseManyLetters
+--                                                                                       parser string   parser char   parser items    parser string
+--               (a -> b -> c -> d) -> Parser a -> Parser b -> Parser c -> Parser d
+
+
+
+
 
 parseRequest :: Parser Request
-parseRequest = and7 parseDigit parseComma parseString parseComma parseString parseComma parseItems
+parseRequest = and7 parseNumber parseComma parseManyLetters parseComma parseManyLetters parseComma parseItems
 
--- >>> parseRequest "1,type,origin,item1,item2"
--- /workspaces/fp-2024/src/Lib2.hs:36:66: error:
---     • Couldn't match type: String -> Either String (String, String)
---                      with: Either String (d1, String)
---       Expected: Parser d1
---         Actual: String -> Parser String
---     • Probable cause: ‘parseString’ is applied to too few arguments
---       In the fifth argument of ‘and7’, namely ‘parseString’
+-- >>> parseItems "item1,item2"
+-- /workspaces/fp-2024/src/Lib2.hs:34:64: error:
+--     • Couldn't match type ‘Char’ with ‘[Char]’
+--       Expected: Parser Items
+--         Actual: Parser String
+--     • In the second argument of ‘or2’, namely ‘parseManyLetters’
 --       In the expression:
---         and7
---           parseDigit parseComma parseString parseComma parseString parseComma
+--         or2 (and3 parseManyLetters parseComma parseItems) parseManyLetters
+--       In an equation for ‘parseItems’:
 --           parseItems
---       In an equation for ‘parseRequest’:
---           parseRequest
---             = and7
---                 parseDigit parseComma parseString parseComma parseString parseComma
---                 parseItems
+--             = or2
+--                 (and3 parseManyLetters parseComma parseItems) parseManyLetters
 -- (deferred type error)
 
 
@@ -165,6 +169,17 @@ parseDigit :: Parser Char
 parseDigit [] = Left "Cannot find any digits in an empty input"
 parseDigit s@(h : t) = if C.isDigit h then Right (h, t) else Left (s ++ " does not start with a digit")
 
+parseNumber :: Parser Integer
+parseNumber [] = Left "empty input, cannot parse a number"
+parseNumber str =
+    let
+        digits = L.takeWhile C.isDigit str
+        rest = drop (length digits) str
+    in
+        case digits of
+            [] -> Left "not a number"
+            _ -> Right (read digits, rest)
+
 parseString :: String -> Parser String
 parseString [] s = Right ([], s)  
 parseString (c:cs) s = case parseChar c s of
@@ -172,6 +187,15 @@ parseString (c:cs) s = case parseChar c s of
   Right (_, rest) -> case parseString cs rest of
     Left err -> Left err
     Right (v2, r2) -> Right (c:v2, r2)
+
+parseManyLetters :: Parser String
+parseManyLetters = many1 parseLetter
+
+parseLetter :: Parser Char
+parseLetter [] = Left "Cannot find any letter in an empty input"
+
+parseLetter s@(h:t) = if C.isLetter h then Right (h, t) else Left (s ++ " does not start with a letter")
+
 
 --helper parsers
 
@@ -227,3 +251,15 @@ and7 f p1 p2 p3 p4 p5 p6 p7 s = case p1 s of
             Right (v6, r6) -> case p7 r6 of
               Left err -> Left err
               Right (v7, r7) -> Right (f v1 v2 v3 v4 v5 v6 v7, r7)
+
+many1 :: Parser a -> Parser [a]
+many1 p s = case p s of
+  Left err -> Left err
+  Right (v1, r1) -> case many1' r1 of
+    (v2, r2) -> Right (v1:v2, r2)
+  where
+    many1' s2 = case p s2 of
+      Left _ -> ([], s2)
+      Right (v2, r2) -> let (vs, r3) = many1' r2 in (v2 : vs, r3)
+
+
