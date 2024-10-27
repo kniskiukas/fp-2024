@@ -1,42 +1,159 @@
-{-# LANGUAGE InstanceSigs #-}
 
+{-# OPTIONS_GHC -Wno-unused-top-binds -Wname-shadowing #-}
+{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
+{-# HLINT ignore "Redundant lambda" #-}
 
 
 module Lib2
     ( Query(..),
     parseQuery,
     State(..),
+    Request(..),
     emptyState,
     stateTransition
-    parseAddRequest,
-    parseListRequests,
-    parseRemoveRequest,
-    parseUpdateRequest,
-    parseFindRequest,
-    RequestInfo,
-
+    --parseAddRequest,
+    --parseListRequests,
+    --parseRemoveRequest,
+    --parseUpdateRequest,
+    --parseFindRequest,
+    --parseAddRequestQuery,
+    --parseRemoveRequestQuery,
+    --parseUpdateRequestQuery,
+    --parseFindRequestQuery,
+    --parseListRequestsQuery,
     ) where
 
--- | An entity which represents user input.
--- It should match the grammar from Laboratory work #1.
--- Currently it has no constructors but you can introduce
--- as many as needed.
+
 
 import qualified Data.Char as C
 
 type Parser a = String -> Either String (a, String)
 
---basic parsers
+parseItems :: Parser Items
+parseItems = or2 and3 parseString parseComma parseItems parseString 
 
--- <char> ::= <a..z,A..Z>
+parseRequest :: Parser Request
+parseRequest = and7 parseDigit parseComma parseString parseComma parseString parseComma parseItems
+
+-- >>> parseRequest "1,type,origin,item1,item2"
+-- /workspaces/fp-2024/src/Lib2.hs:36:66: error:
+--     • Couldn't match type: String -> Either String (String, String)
+--                      with: Either String (d1, String)
+--       Expected: Parser d1
+--         Actual: String -> Parser String
+--     • Probable cause: ‘parseString’ is applied to too few arguments
+--       In the fifth argument of ‘and7’, namely ‘parseString’
+--       In the expression:
+--         and7
+--           parseDigit parseComma parseString parseComma parseString parseComma
+--           parseItems
+--       In an equation for ‘parseRequest’:
+--           parseRequest
+--             = and7
+--                 parseDigit parseComma parseString parseComma parseString parseComma
+--                 parseItems
+-- (deferred type error)
+
+
+
+data Query = 
+  AddRequest Request
+  | ListRequests
+  | RemoveRequest Int
+  | UpdateRequest Int Request
+  | FindRequest String
+  deriving (Eq, Show)
+
+data Request = Request RequestId RequestType RequestOrigin Items
+  deriving (Eq, Show)
+type RequestId = Int
+type RequestType = String
+type RequestOrigin = String 
+type Items = [String]
+
+parseQuery :: String -> Either String Query
+parseQuery s = case parseCommand s of
+  Left err -> Left err
+  Right (v, r) -> if null r then Right v else Left ("Unexpected '" ++ r ++ "' after parsing")
+
+-- >>> parseAddRequest "add_request 1, type, origin, item1, item2"
+-- /workspaces/fp-2024/src/Lib2.hs:77:50: error:
+--     • Couldn't match type ‘Char’ with ‘[Char]’
+--       Expected: Parser String
+--         Actual: Parser Char
+--     • In the third argument of ‘and3’, namely ‘parseSpace’
+--       In the expression:
+--         and3 parseString "add_request" parseSpace parseRequest
+--       In an equation for ‘parseAddRequest’:
+--           parseAddRequest
+--             = and3 parseString "add_request" parseSpace parseRequest
+-- (deferred type error)
+parseCommand :: Parser Query
+parseCommand = or2 parseAddRequest (or2 parseListRequests (or2 parseRemoveRequest (or2 parseUpdateRequest parseFindRequest)))
+
+-- Assuming you have a type `Request` and a parser `parseRequest`
+parseAddRequest :: Parser Query
+parseAddRequest = and3 parseString "add_request" parseSpace parseRequest
+
+parseListRequests :: Parser Query
+parseListRequests = parseString "list_requests"
+
+parseRemoveRequest :: Parser Query
+parseRemoveRequest = and3 parseString "remove_request" parseSpace parseDigit
+
+parseUpdateRequest :: Parser Query
+parseUpdateRequest = and5 parseString "update_request" parseSpace parseDigit parseSpace parseRequest
+
+parseFindRequest :: Parser Query
+parseFindRequest = and3 parseString "find_request" parseSpace parseDigit
+
+data State = State {
+  requests :: [Request],
+  requestIds :: [Int]
+}
+ deriving (Eq, Show)
+
+
+ 
+
+
+emptyState :: State
+emptyState = State [] []
+
+
+stateTransition :: State -> Query -> Either String (Maybe String, State)
+stateTransition s (AddRequest r) = 
+  if requestExists (requests s) r
+    then Left "Request already exists"
+    else Right (Just "Request added", State (r : requests s) (requestIds s ++ [requestId r]))
+
+stateTransition s ListRequests = Right (Just (show (requests s)), s)
+
+stateTransition s (RemoveRequest i) =
+  if not (requestIdExists (requestIds s) i)
+    then Left "Request does not exist"
+    else Right (Just "Request removed", State (filter (\r -> requestId r /= i) (requests s)) (filter (/= i) (requestIds s)))
+
+stateTransition s (UpdateRequest i r) =
+  if not (requestIdExists (requestIds s) i)
+    then Left "Request does not exist"
+    else Right (Just "Request updated", State (map (\r2 -> if requestId r2 == i then r else r2) (requests s)) (requestIds s))
+
+stateTransition s (FindRequest t) = Right (Just (show (filter (\r -> requestType r == t) (requests s))), s)
+
+stateTransition s _ = Right (Nothing, s)
+
+
+
+
+
+
+
+--basic parsers
 
 parseChar :: Char -> Parser Char
 parseChar _ [] = Left "Cannot find character in an empty input"
 parseChar c s@(h : t) = if c == h then Right (c, t) else Left ("Expected '" ++ [c] ++ "' but found '" ++ [h] ++ "' in " ++ s)
-
--- parseLetter :: Parser Char
--- parseLetter [] = Left "Cannot find any letter in an empty input"
--- parseLetter s@(h : t) = if C.isLetter h then Right (h, t) else Left (s ++ " does not start with a letter")
 
 parseSpace :: Parser Char
 parseSpace = parseChar ' '
@@ -44,13 +161,9 @@ parseSpace = parseChar ' '
 parseComma :: Parser Char
 parseComma = parseChar ','
 
--- <integer> ::= <sequence of digits>
-
 parseDigit :: Parser Char
 parseDigit [] = Left "Cannot find any digits in an empty input"
 parseDigit s@(h : t) = if C.isDigit h then Right (h, t) else Left (s ++ " does not start with a digit")
-
--- <string> ::= <char> | <char> <string>
 
 parseString :: String -> Parser String
 parseString [] s = Right ([], s)  
@@ -61,6 +174,15 @@ parseString (c:cs) s = case parseChar c s of
     Right (v2, r2) -> Right (c:v2, r2)
 
 --helper parsers
+
+or2 :: Parser a -> Parser a -> Parser a
+or2 a b = \input ->
+    case a input of
+        Right r1 -> Right r1
+        Left e1 ->
+            case b input of
+                Right r2 -> Right r2
+                Left e2 -> Left (e1 ++ ", " ++ e2)
 
 and2 :: (a -> b -> c) -> Parser a -> Parser b -> Parser c
 and2 f p1 p2 s = case p1 s of
@@ -105,154 +227,3 @@ and7 f p1 p2 p3 p4 p5 p6 p7 s = case p1 s of
             Right (v6, r6) -> case p7 r6 of
               Left err -> Left err
               Right (v7, r7) -> Right (f v1 v2 v3 v4 v5 v6 v7, r7)
-
--- orX :: [Parser a] -> Parser a
--- orX [] _ = Left "No parser matched"
--- orX (p : ps) s = case p s of
---   Left _ -> orX ps s
---   Right res -> Right res
-
--- many1 :: Parser a -> Parser [a]
--- many1 p s = case p s of
---   Left err -> Left err
---   Right (v1, r1) -> case many1' r1 of
---     (v2, r2) -> Right (v1:v2, r2)
---   where
---     many1' s2 = case p s2 of
---       Left _ -> ([], s2)
---       Right (v2, r2) -> let (vs, r3) = many1' r2 in (v2 : vs, r3)
-
---needed parsers
-
--- <items> ::= <item> | <item> ", " <items>
-
-parseItems :: Parser Items
-parseItems = or2 (and3 parseString parseComma parseItems) parseString 
-
--- <request> ::= <request_id> "," <request_type> "," <request_origin> "," <items>
-
-parseRequest :: Parser RequestInfo
-
-parseRequest = and7 parseDigit parseComma parseString parseComma parseString parseComma parseItems
-
-
-
-
-
-
-
-
-data Query = 
-  AddRequest RequestInfo
-  | ListRequests
-  | RemoveRequest Int
-  | UpdateRequest Int RequestInfo
-  | FindRequest String
-  deriving (Eq, Show)
-
-  data Request = Request RequestId RequestType RequestOrigin Items 
-  deriving (Eq, Show)
-  type RequestId = Int
-  data RequestType = String
-  deriving (Eq, Show)
-  data RequestOrigin = String
-  deriving (Eq, Show)
-  type Items = [String]
-  deriving (Eq, Show)
-
--- | The instances are needed basically for tests
-instance Eq Query where
-  (==) _ _= False
-
-
-
-
-instance Show Query where
-  show _ = ""
-
-
-
--- | Parses user's input.
--- The function must have tests.
-parseQuery :: String -> Either String Query
-parseQuery _ = Left "Not implemented 2"
-
--- <add_request> ::= "add_request " <request>
--- <list_requests> ::= "list_requests "
--- <find_request> ::= "find_request " <request_id>
--- <remove_request> ::= "remove_request " <request_id>
--- <update_request> ::= "update_request " <request>
-
-parseCommand :: Parser Query
-parseCommand = or2 parseAddRequest (or2 parseListRequests (or2 parseRemoveRequest (or2 parseUpdateRequest parseFindRequest)))
-
-parseAddRequest :: Parser Query
-parseAddRequest = and3 parseString parseSpace parseRequest
-
-parseListRequests :: Parser Query
-parseListRequests = parseString "list_requests"
-
-parseRemoveRequest :: Parser Query
-parseRemoveRequest = and3 parseString parseSpace parseDigit
-
-parseUpdateRequest :: Parser Query
-parseUpdateRequest = and5 parseString parseSpace parseDigit parseSpace parseRequest
-
-parseFindRequest :: Parser Query
-parseFindRequest = and3 parseString parseSpace parseDigit
-
-
-
-
-
-
-
--- | An entity which represents your program's state.
--- Currently it has no constructors but you can introduce
--- as many as needed.
-data State
-  deriving (Eq, Show)
-
-
-
-
--- | Creates an initial program's state.
--- It is called once when the program starts.
-emptyState :: State
-emptyState = error "Not implemented 1"
-
-
-
--- | Updates a state according to a query.
--- This allows your program to share the state
--- between repl iterations.
--- Right contains an optional message to print and
--- an updated program's state.
-stateTransition :: State -> Query -> Either String (Maybe String, State)
-stateTransition _ _ = Left "Not implemented 3"
-
-
-
-
--- ideas
--- request type parsing cases
--- case parseWord s of
---     Left err -> Left err
---     Right ("Drink", r) -> Right (Drink, r)
---     Right ("Main", r) -> Right (Main, r)
---     Right ("Dessert", r) -> Right (Dessert, r)
---     Right ("Snack", r) -> Right (Snack, r)
---     Right ("Other", r) -> Right (Other, r)
---     Right (v, _) -> Left (v ++ " is not a valid request type")
-
--- request origin parsing cases
--- case parseWord s of
---     Left err -> Left err
---     Right ("Table", r) -> Right (Table, r)
---     Right ("Waiter", r) -> Right (Waiter, r)
---     Right ("Bar", r) -> Right (Bar, r)
---     Right ("Kitchen", r) -> Right (Kitchen, r)
---     Right ("Delivery", r) -> Right (Delivery, r)
---     Right ("Takeaway", r) -> Right (Takeaway, r)
---     Right ("Online", r) -> Right (Online, r)
---     Right (v, _) -> Left (v ++ " is not a valid request origin")

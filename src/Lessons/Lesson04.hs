@@ -78,6 +78,9 @@ or2 a b = \input ->
 parseAlphaNum :: Parser Char
 parseAlphaNum = or2 parseLetter parseDigit
 
+-- >>> parseNumber "123"
+-- Right (123,"")
+
 -- >>> parseNumber "123d"
 -- Right (123,"d")
 parseNumber :: Parser Integer

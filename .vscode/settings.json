@@ -1,5 +1,11 @@
 {
-    "haskell.upgradeGHCup": false,
     "haskell.manageHLS": "GHCup",
-    "haskell.serverExecutablePath": "C:/hls"
+    "haskell.toolchain": {
+      "hls": "recommended",
+      "stack": "recommended",
+      "cabal": null
+    },
+    "haskell.serverEnvironment": {
+      "PATH": "${HOME}/.ghcup/bin:$PATH"
+    }
 }

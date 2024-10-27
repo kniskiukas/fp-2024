@@ -1,9 +1,9 @@
 <command> ::= <add_request> | <list_requests> | <find_request> | <remove_request> | <update_request> | <quit>
-<add_request> ::= "add_request " <request>
-<list_requests> ::= "list_requests "
-<find_request> ::= "find_request " <request_id>
-<remove_request> ::= "remove_request " <request_id>
-<update_request> ::= "update_request " <request_id> " " <request>
+<add_request> ::= "add " <request>
+<list_requests> ::= "list "
+<find_request> ::= "find " <request_id>
+<remove_request> ::= "remove " <request_id>
+<update_request> ::= "update " <request_id> " " <request>
 <request> ::= <request_id> "," <request_type> "," <request_origin> "," <items>
 <request_id> ::= <int>
 <request_type> ::= <string>
