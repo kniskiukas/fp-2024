@@ -11,16 +11,5 @@ completions = [
     "removeRequest",
     "listRequests",
     "findRequest",
-    "updateRequest",
-    "quit",
-    -- request type
-    "drink",
-    "appetizer",
-    "main",
-    "desert",
-    -- request origin
-    "table",
-    "bar",
-    "online",
-    "waiter"
+    "updateRequest"
     ]

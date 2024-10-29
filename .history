@@ -1,0 +1,11 @@
+list_requests
+add_request 2,type,origin,item1,item2
+list_requests
+add_request 1,type,origin,item1,item2
+parseAddRequest "add_request 1,type,origin,item1,item2"
+k
+k
+addRequest 1,type,origin,item1,item2
+ghci
+quit
+q

@@ -10,143 +10,163 @@ module Lib2
     State(..),
     Request(..),
     emptyState,
-    stateTransition
-    --parseAddRequest,
-    --parseListRequests,
-    --parseRemoveRequest,
-    --parseUpdateRequest,
-    --parseFindRequest,
-    --parseAddRequestQuery,
-    --parseRemoveRequestQuery,
-    --parseUpdateRequestQuery,
-    --parseFindRequestQuery,
-    --parseListRequestsQuery,
+    stateTransition,
+    parseAddRequest,
+    parseListRequests,
+    parseRemoveRequest,
+    parseUpdateRequest,
+    parseFindRequest,
+    Items(..)
     ) where
 
 
 
 import qualified Data.Char as C
 
+
 type Parser a = String -> Either String (a, String)
 
+parseItem :: Parser Items
+parseItem s = case many parseAlphaNum s of
+  Left e -> Left e
+  Right (cs, r) -> Right (Items [cs], r)
+
 parseItems :: Parser Items
-parseItems = or2 and3 parseString parseComma parseItems parseString 
+parseItems = or2  (and3 (\(Items i) _ (Items it) -> Items (head i : it)) parseItem parseComma parseItems) parseItem
+
+
+-- >>> parseRequestId "333"
+-- Right (333,"")
+parseRequestId :: Parser Int
+parseRequestId input =
+  case many parseDigit input of
+    Left err -> Left err
+    Right (digits, rest) -> Right (read digits, rest)
 
 parseRequest :: Parser Request
-parseRequest = and7 parseDigit parseComma parseString parseComma parseString parseComma parseItems
+parseRequest = and7 (\n _ t _ o _ i -> Request n t o i) parseRequestId parseComma (many parseLetter) parseComma (many parseLetter) parseComma parseItems
 
 -- >>> parseRequest "1,type,origin,item1,item2"
--- /workspaces/fp-2024/src/Lib2.hs:36:66: error:
---     • Couldn't match type: String -> Either String (String, String)
---                      with: Either String (d1, String)
---       Expected: Parser d1
---         Actual: String -> Parser String
---     • Probable cause: ‘parseString’ is applied to too few arguments
---       In the fifth argument of ‘and7’, namely ‘parseString’
---       In the expression:
---         and7
---           parseDigit parseComma parseString parseComma parseString parseComma
---           parseItems
---       In an equation for ‘parseRequest’:
---           parseRequest
---             = and7
---                 parseDigit parseComma parseString parseComma parseString parseComma
---                 parseItems
--- (deferred type error)
+-- Right (Request 1 "type" "origin" (Items ["item1","item2"]),"")
 
 
 
-data Query = 
+data Query =
   AddRequest Request
   | ListRequests
   | RemoveRequest Int
   | UpdateRequest Int Request
-  | FindRequest String
+  | FindRequest Int
   deriving (Eq, Show)
 
-data Request = Request RequestId RequestType RequestOrigin Items
+data Request = Request {
+  requestId :: Int,
+  requestType :: String,
+  requestOrigin :: String,
+  items :: Items
+ }
+ deriving (Eq, Show)
+--type Items = [String]
+newtype Items = Items [String]
   deriving (Eq, Show)
-type RequestId = Int
-type RequestType = String
-type RequestOrigin = String 
-type Items = [String]
+
+
 
 parseQuery :: String -> Either String Query
-parseQuery s = case parseCommand s of
-  Left err -> Left err
-  Right (v, r) -> if null r then Right v else Left ("Unexpected '" ++ r ++ "' after parsing")
+parseQuery s = case or2 parseAddRequest (or2 parseListRequests (or2 parseRemoveRequest (or2 parseUpdateRequest parseFindRequest))) 
+  s of
+    Left err -> Left ("Unexpected command: " ++ s)
+    Right (v, r) -> if null r then Right v else Left ("Unexpected '" ++ r ++ "' after parsing")
 
--- >>> parseAddRequest "add_request 1, type, origin, item1, item2"
--- /workspaces/fp-2024/src/Lib2.hs:77:50: error:
---     • Couldn't match type ‘Char’ with ‘[Char]’
---       Expected: Parser String
---         Actual: Parser Char
---     • In the third argument of ‘and3’, namely ‘parseSpace’
---       In the expression:
---         and3 parseString "add_request" parseSpace parseRequest
---       In an equation for ‘parseAddRequest’:
---           parseAddRequest
---             = and3 parseString "add_request" parseSpace parseRequest
--- (deferred type error)
-parseCommand :: Parser Query
-parseCommand = or2 parseAddRequest (or2 parseListRequests (or2 parseRemoveRequest (or2 parseUpdateRequest parseFindRequest)))
+-- >>> parseAddRequest "add_request 1,type,origin,item1,item2"
+-- Right (AddRequest (Request {requestId = 1, requestType = "type", requestOrigin = "origin", items = Items ["item1","item2"]}),"")
+-- parseCommand :: Parser Query
+-- parseCommand = or2 parseAddRequest (or2 parseListRequests (or2 parseRemoveRequest (or2 parseUpdateRequest parseFindRequest)))
 
 -- Assuming you have a type `Request` and a parser `parseRequest`
 parseAddRequest :: Parser Query
-parseAddRequest = and3 parseString "add_request" parseSpace parseRequest
+parseAddRequest = and3 (\_ _ r -> AddRequest r) (parseString "add_request") parseSpace parseRequest
 
 parseListRequests :: Parser Query
-parseListRequests = parseString "list_requests"
+parseListRequests s = case parseString "list_requests" s of
+  Left err -> Left err
+  Right (_, r) -> Right (ListRequests, r)
 
 parseRemoveRequest :: Parser Query
-parseRemoveRequest = and3 parseString "remove_request" parseSpace parseDigit
+parseRemoveRequest = and3 (\_ _ n -> RemoveRequest n) (parseString "remove_request") parseSpace parseRequestId
+
+-- >>> parseUpdateRequest "update_request 1 1,type,origin,item1,item2"
+-- Right (UpdateRequest 1 (Request {requestId = 1, requestType = "type", requestOrigin = "origin", items = Items ["item1","item2"]}),"")
 
 parseUpdateRequest :: Parser Query
-parseUpdateRequest = and5 parseString "update_request" parseSpace parseDigit parseSpace parseRequest
+parseUpdateRequest = and5 (\_ _ n _ r -> UpdateRequest n r) (parseString "update_request") parseSpace parseRequestId parseSpace parseRequest
 
 parseFindRequest :: Parser Query
-parseFindRequest = and3 parseString "find_request" parseSpace parseDigit
+parseFindRequest = and3 (\_ _ n -> FindRequest n) (parseString "find_request") parseSpace parseRequestId
 
-data State = State {
-  requests :: [Request],
-  requestIds :: [Int]
-}
+-- >>> parseFindRequest "find_request 1"
+-- Right (FindRequest 1,"")
+
+-- parseFindRequest s = case parseString "find_request" s of
+--   Left err -> Left err
+--   Right (_, r) -> case parseSpace r of
+--     Left err -> Left err
+--     Right(_, r1) -> case parseRequestId r1 of
+--       Left err -> Left err
+--       Right(_, r2) -> Right (FindRequest, r2)
+
+newtype State =
+  State {
+    requests :: [Request]
+  }
  deriving (Eq, Show)
 
-
- 
-
-
 emptyState :: State
-emptyState = State [] []
-
+emptyState = State []
 
 stateTransition :: State -> Query -> Either String (Maybe String, State)
-stateTransition s (AddRequest r) = 
-  if requestExists (requests s) r
+stateTransition s (AddRequest r) =
+  if requestExists r s
     then Left "Request already exists"
-    else Right (Just "Request added", State (r : requests s) (requestIds s ++ [requestId r]))
+    else Right (Just "Request added", State (r : requests s))
 
 stateTransition s ListRequests = Right (Just (show (requests s)), s)
 
+
 stateTransition s (RemoveRequest i) =
-  if not (requestIdExists (requestIds s) i)
+  if not (requestByIdExists i s)
     then Left "Request does not exist"
-    else Right (Just "Request removed", State (filter (\r -> requestId r /= i) (requests s)) (filter (/= i) (requestIds s)))
+    else Right (Just "Request removed", State (filter (\r -> requestId r /= i) (requests s)))
+
+-- >>> stateTransition (State [Request 1 "type" "origin" (Items ["item1","item2"])]) (RemoveRequest 1)
+-- Right (Just "Request removed",State {requests = []})
 
 stateTransition s (UpdateRequest i r) =
-  if not (requestIdExists (requestIds s) i)
+  if not (requestByIdExists i s)
     then Left "Request does not exist"
-    else Right (Just "Request updated", State (map (\r2 -> if requestId r2 == i then r else r2) (requests s)) (requestIds s))
+    else Right (Just "Request updated", State (map (\r2 -> if requestId r2 == i then r else r2) (requests s)))
 
-stateTransition s (FindRequest t) = Right (Just (show (filter (\r -> requestType r == t) (requests s))), s)
+-- >>> stateTransition (State [Request 1 "type" "origin" (Items ["item1","item2"])]) (UpdateRequest 1 (Request 1 "typo" "origin" (Items ["item1","item2"])))
+-- Right (Just "Request updated",State {requests = [Request {requestId = 1, requestType = "typo", requestOrigin = "origin", items = Items ["item1","item2"]}]})
 
-stateTransition s _ = Right (Nothing, s)
+stateTransition s (FindRequest i) = Right (Just (show (filter (\r -> requestId r == i) (requests s))), s)
+
+-- >>> stateTransition (State [Request 1 "type" "origin" (Items ["item1","item2"])]) (FindRequest 1)
+-- Right (Just "[Request {requestId = 1, requestType = \"type\", requestOrigin = \"origin\", items = Items [\"item1\",\"item2\"]}]",State {requests = [Request {requestId = 1, requestType = "type", requestOrigin = "origin", items = Items ["item1","item2"]}]})
+
+-- stateTransition s _ = Right (Nothing, s)
 
 
 
 
+requestByIdExists :: Int -> State -> Bool
+requestByIdExists rid s = rid `elem` map requestId (requests s)
 
+-- >>> requestByIdExists 1 (State [Request 1 "type" "origin" (Items ["item1","item2"])])
+-- True
+
+requestExists :: Request -> State -> Bool
+requestExists r s = r `elem` requests s
 
 
 --basic parsers
@@ -165,15 +185,38 @@ parseDigit :: Parser Char
 parseDigit [] = Left "Cannot find any digits in an empty input"
 parseDigit s@(h : t) = if C.isDigit h then Right (h, t) else Left (s ++ " does not start with a digit")
 
+parseLetter :: Parser Char
+parseLetter [] = Left "Cannot find any letter in an empty input"
+parseLetter s@(h:t) = if C.isLetter h then Right (h, t) else Left (s ++ " does not start with a letter")
+
+parseAlphaNum :: Parser Char
+parseAlphaNum [] = Left "Cannot find any alphanumeric character in an empty input"
+parseAlphaNum s@(h:t) = if C.isAlphaNum h then Right (h, t) else Left (s ++ " does not start with an alphanumeric character")
+
 parseString :: String -> Parser String
-parseString [] s = Right ([], s)  
+parseString [] s = Right ([], s)
 parseString (c:cs) s = case parseChar c s of
   Left err -> Left err
   Right (_, rest) -> case parseString cs rest of
     Left err -> Left err
     Right (v2, r2) -> Right (c:v2, r2)
 
+-- parseNumber :: Parser Integer
+-- parseNumber [] = Left "Cannot find any numbers in an empty input"
+-- parseNumber input = 
+--   case many parseDigit input of
+--     Left err -> Left err
+--     Right (digits, rest) -> Right(read digits, rest)
+
 --helper parsers
+
+many :: Parser a -> Parser [a]
+many p = many' p []
+    where
+        many' p' acc = \input ->
+            case p' input of
+                Left _ -> Right (acc, input)
+                Right (v, r) -> many' p' (acc ++ [v]) r
 
 or2 :: Parser a -> Parser a -> Parser a
 or2 a b = \input ->
@@ -210,6 +253,19 @@ and4 f p1 p2 p3 p4 s = case p1 s of
       Right (v3, r3) -> case p4 r3 of
         Left err -> Left err
         Right (v4, r4) -> Right (f v1 v2 v3 v4, r4)
+
+and5 :: (a -> b -> c -> d -> e -> f) -> Parser a -> Parser b -> Parser c -> Parser d -> Parser e -> Parser f
+and5 f p1 p2 p3 p4 p5 s = case p1 s of
+  Left err -> Left err
+  Right (v1, r1) -> case p2 r1 of
+    Left err -> Left err
+    Right (v2, r2) -> case p3 r2 of
+      Left err -> Left err
+      Right (v3, r3) -> case p4 r3 of
+        Left err -> Left err
+        Right (v4, r4) -> case p5 r4 of
+          Left err -> Left err
+          Right (v5, r5) -> Right (f v1 v2 v3 v4 v5, r5)
 
 and7 :: (a -> b -> c -> d -> e -> f -> g -> h) -> Parser a -> Parser b -> Parser c -> Parser d -> Parser e -> Parser f -> Parser g -> Parser h
 and7 f p1 p2 p3 p4 p5 p6 p7 s = case p1 s of
