@@ -1,5 +1,7 @@
 {
     "haskell.upgradeGHCup": false,
     "haskell.manageHLS": "GHCup",
-    "haskell.serverExecutablePath": "C:/ghcup/hls"
+    
+    "haskell.serverExecutablePath": "/root/.ghcup/hls/2.9.0.1/bin/haskell-language-server-wrapper"
+
 }
