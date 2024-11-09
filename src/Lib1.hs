@@ -7,20 +7,10 @@ module Lib1
 completions :: [String]
 completions = [
     -- actions
-    "addRequest",
-    "removeRequest",
-    "listRequests",
-    "findRequest",
-    "updateRequest",
-    "quit",
-    -- request type
-    "drink",
-    "appetizer",
-    "main",
-    "desert",
-    -- request origin
-    "table",
-    "bar",
-    "online",
-    "waiter"
+    "add_request",
+    "remove_request",
+    "list_requests",
+    "find_request",
+    "update_request",
+    "remove_all_requests"
     ]
