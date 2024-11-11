@@ -25,6 +25,7 @@ source-repository head
 
 library
   exposed-modules:
+      BasicParsers
       Lessons.Lesson01
       Lessons.Lesson02
       Lessons.Lesson03
