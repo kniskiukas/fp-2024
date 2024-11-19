@@ -40,7 +40,7 @@ parseItem = Items . (:[]) <$> parseAlphaNumString
 
 parseItems :: Parser Items
 -- parseItems = or2  (and3 (\(Items i) _ (Items it) -> Items (head i : it)) parseItem parseComma parseItems) parseItem
-parseItems = Items <$> many (parseAlphaNumString <* parseComma)
+parseItems = Items <$> many (parseItem <* parseComma)
 
 parseRequestId :: Parser Int
 -- parseRequestId input =
@@ -51,7 +51,7 @@ parseRequestId = read <$> many parseDigit
 
 parseRequest :: Parser Request
 -- parseRequest = and7 (\n _ t _ o _ i -> Request n t o i) parseRequestId parseComma (many parseLetter) parseComma (many parseLetter) parseComma parseItems
-parseRequest = Request <$> (parseRequestId <* parseComma) <*> (many parseLetter <* parseComma) <*> (many parseLetter <* parseComma) <*> parseItems
+parseRequest = Request <$> (parseRequestId <* parseComma) <*> (many parseLetter <* parseComma) <*> (many parseLetter <* parseComma) <*> (parseItems <|> parseItem)
 
 data Query =
   AddRequest Request
@@ -86,6 +86,11 @@ parseAddRequest :: Parser Query
 -- parseAddRequest = and3 (\_ _ r -> AddRequest r) (parseString "add_request") parseSpace parseRequest
 
 parseAddRequest =  AddRequest <$> (parseString "add_request" *> parseSpace *> parseRequest)
+
+-- >>> runParser parseRequest "1,abc,def,ghi,jkl,mno,pqr"
+-- Right (Request {requestId = 1, requestType = "abc", requestOrigin = "def", items = Items ["ghi"]},",jkl,mno,pqr")
+-- >>> runParser parseRequest "1,abc,def,ghi"
+-- Right (Request {requestId = 1, requestType = "abc", requestOrigin = "def", items = Items ["ghi"]},"")
 
 parseListRequests :: Parser Query
 -- parseListRequests s = case parseString "list_requests" s of
