@@ -8,7 +8,6 @@
 module Lib2
     ( Query(..),
     parseQuery,
-    Parser(..),
     State(..),
     Request(..),
     emptyState,
@@ -18,8 +17,6 @@ module Lib2
     parseRemoveRequest,
     parseUpdateRequest,
     parseFindRequest,
-    parseRemoveAllRequests,
-    parseString,
     Items(..)
     ) where
 
@@ -41,29 +38,9 @@ parseItem :: Parser Items
 parseItem = Items . (:[]) <$> parseAlphaNumString
 
 
--- parseItems :: Parser Items
--- parseItems = or2  (and3 (\(Items i) _ (Items it) -> Items (head i : it)) parseItem parseComma parseItems) parseItem
--- parseItems = Items <$> many (parseAlphaNumString <* parseComma)
--- parseItems = do (
---  item <- parseItem
---  parseComma
---  items <- parseItems
---  return item:items
--- )
--- <|>
--- do (
---  item <- parseItem
---  return item
--- )
-
 parseItems :: Parser Items
-parseItems = parseMultipleItems <|> parseItem
-  where
-    parseMultipleItems = parseItem >>= \firstItem ->
-                         parseComma *> 
-                         parseItems >>= \restItems ->
-                         return $ Items (unItems firstItem ++ unItems restItems)
-    unItems (Items xs) = xs
+-- parseItems = or2  (and3 (\(Items i) _ (Items it) -> Items (head i : it)) parseItem parseComma parseItems) parseItem
+parseItems = Items <$> many (parseItem <* parseComma)
 
 parseRequestId :: Parser Int
 -- parseRequestId input =
@@ -111,7 +88,7 @@ parseAddRequest :: Parser Query
 parseAddRequest =  AddRequest <$> (parseString "add_request" *> parseSpace *> parseRequest)
 
 -- >>> runParser parseRequest "1,abc,def,ghi,jkl,mno,pqr"
--- Right (Request {requestId = 1, requestType = "abc", requestOrigin = "def", items = Items ["ghi","jkl","mno","pqr"]},"")
+-- Right (Request {requestId = 1, requestType = "abc", requestOrigin = "def", items = Items ["ghi"]},",jkl,mno,pqr")
 -- >>> runParser parseRequest "1,abc,def,ghi"
 -- Right (Request {requestId = 1, requestType = "abc", requestOrigin = "def", items = Items ["ghi"]},"")
 
@@ -140,8 +117,6 @@ parseRemoveAllRequests :: Parser Query
 --   Right (_, r) -> Right (RemoveAllRequests, r)
 
 parseRemoveAllRequests = RemoveAllRequests <$ parseString "remove_all_requests"
-
-
 
 newtype State =
   State {
@@ -264,10 +239,6 @@ instance Alternative Parser where
   --       case p' input of
   --         Left _ -> Right (acc, input)
   --         Right (v, r) -> many' p' (acc ++ [v]) r
-instance Monad Parser where
-  (>>=) :: Parser a -> (a -> Parser b) -> Parser b
-  p >>= f = Parser $ \s -> case runParser p s of
-    Left err -> Left err
-    Right (result, rest) -> runParser (f result) rest
+
 
 
