@@ -9,8 +9,8 @@ module Lib3
     renderStatements
     ) where
 
-import Control.Concurrent ( Chan )
-import Control.Concurrent.STM(STM, TVar)
+import Control.Concurrent (Chan, newChan, readChan, writeChan)
+import Control.Concurrent.STM (STM, TVar, atomically, readTVar, readTVarIO, writeTVar)
 import qualified Lib2
 import Lib2 (Parser, parseString, runParser)
 import System.Directory (doesFileExist)
@@ -51,9 +51,9 @@ instance Show Statements where
 renderQuery :: Lib2.Query -> String
 renderQuery (Lib2.AddRequest (Lib2.Request n t o i)) = show n ++ "," ++ t ++ "," ++ o ++ "," ++ i
 renderQuery Lib2.ListRequests = "list"
-renderQuery (Lib2.RemoveRequest i) = "remove," ++ show i
-renderQuery (Lib2.UpdateRequest i (Lib2.Request n t o it)) = "update," ++ show i ++ "," ++ n ++ "," ++ t ++ "," ++ o ++ "," ++ it
-renderQuery (Lib2.FindRequest i) = "find," ++ show i
+renderQuery (Lib2.RemoveRequest i) = "remove " ++ show i
+renderQuery (Lib2.UpdateRequest i (Lib2.Request n t o it)) = "update " ++ show i ++ ": " ++ n ++ "," ++ t ++ "," ++ o ++ "," ++ it
+renderQuery (Lib2.FindRequest i) = "find " ++ show i
 renderQuery Lib2.RemoveAllRequests = "removeall"
 
 
@@ -99,22 +99,74 @@ renderStatements = show
 -- is stored in transactinal variable
 stateTransition :: TVar Lib2.State -> Command -> Chan StorageOp ->
                    IO (Either String (Maybe String))
-stateTransition _ _ ioChan = return $ Left "Not implemented 6"
+stateTransition state SaveCommand ioChan = do
+  currentState <- readTVarIO state
+  responseChan <- newChan
+  writeChan ioChan (Save (renderStatements $ marshallState currentState) responseChan)
+  readChan responseChan
+  return $ Right (Just "State saved")
 
+stateTransition state LoadCommand ioChan = do
+  atomically $ writeTVar state Lib2.emptyState
+  responseChan <- newChan
+  writeChan ioChan (Load responseChan)
+  maybeContent <- readChan responseChan
+  case maybeContent of 
+    Nothing -> return $ Right (Just "No state to load")
+    Just content -> case parseStatements content of
+      Left err -> return $ Left $ "Error loading state: \n" ++ err
+      Right (statements, _) -> stateTransition state (StatementCommand statements) ioChan
+
+stateTransition state (StatementCommand statementList) _ =
+  atomically $ atomicStatements state statementList
+
+transitionThroughList :: Lib2.State -> [Lib2.Query] -> Either String (Maybe String, Lib2.State)
+transitionThroughList _ [] = Left "No queries to execute"
+transitionThroughList state (q:qs) = 
+  case Lib2.stateTransition state q of
+    Left err -> Left err
+    Right (msg, newState) -> 
+      if null qs
+        then Right (msg, newState)
+        else case transitionThroughList newState qs of
+          Left err -> Left err
+          Right (msg2, finalState) -> Right (combineMessages msg msg2, finalState)
+
+combineMessages :: Maybe String -> Maybe String -> Maybe String
+combineMessages Nothing Nothing = Nothing
+combineMessages (Just msg1) Nothing = Just msg1
+combineMessages Nothing (Just msg2) = Just msg2
+combineMessages (Just msg1) (Just msg2) = Just (msg1 ++ "\n" ++ msg2)
+
+atomicStatements :: TVar Lib2.State -> Statements -> STM (Either String (Maybe String))
+atomicStatements state statement = do
+  currentState <- readTVar state
+  case statement of
+    Single q -> 
+      case Lib2.stateTransition currentState q of
+        Left err -> return $ Left err
+        Right (msg, newState) -> writeTVar state newState >> return (Right (msg))
+    Batch qs -> 
+      case transitionThroughList currentState qs of
+        Left err -> return $ Left err
+        Right (msg, newState) -> writeTVar state newState >> return (Right msg)
+    
 
 statements :: Parser Statements
-statements = 
+statements =
   ( do
-    batch <- 
-      many
-        (do
-          q <- Lib2.parseQuery
-          _ <- parseString ";\n"
-          return q
-        )
+      _ <- parseString "begin\n"
+      batch <-
+        many
+          ( do
+              query <- Lib2.query
+              _ <- parseString ";\n"
+              return query
+          )
       _ <- parseString "end\n"
       return $ Batch batch
-) <|> (Single <$> Lib2.parseQuery)
+  )
+    <|> (Single <$> Lib2.query)
 
 loadParser :: Parser Command
 loadParser = do
