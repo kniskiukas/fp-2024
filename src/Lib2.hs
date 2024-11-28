@@ -23,23 +23,15 @@ module Lib2
 import qualified Data.Char as C
 import Control.Applicative
 
-
-
--- type Parser a = String -> Either String (a, String)
-
 newtype Parser a = Parser {
     runParser :: String -> Either String (a, String)
 }
 
 parseItem :: Parser Items
--- parseItem s = case many parseAlphaNum s of
---   Left e -> Left e
---   Right (cs, r) -> Right (Items [cs], r)
 parseItem = Items . (:[]) <$> parseAlphaNumString
 
 
 parseItems :: Parser Items
--- parseItems = or2  (and3 (\(Items i) _ (Items it) -> Items (head i : it)) parseItem parseComma parseItems) parseItem
 parseItems = Items <$> many (parseItem <* parseComma)
 
 parseRequestId :: Parser Int
@@ -74,29 +66,15 @@ newtype Items = Items [String]
   deriving (Eq, Show)
 
 parseQuery :: String -> Either String Query
--- parseQuery s = case or2 parseAddRequest (or2 parseListRequests (or2 parseRemoveRequest (or2 parseUpdateRequest (or2 parseFindRequest parseRemoveAllRequests))))
---   s of
---     Left _ -> Left ("Unexpected command: " ++ s)
---     Right (v, r) -> if null r then Right v else Left ("Unexpected '" ++ r ++ "' after parsing")
+
 parseQuery s = case runParser (parseAddRequest <|> parseListRequests <|> parseRemoveRequest <|> parseUpdateRequest <|> parseFindRequest <|> parseRemoveAllRequests) s of
   Left err -> Left err
   Right (result, rest) -> if null rest then Right result else Left ("Unexpected '" ++ rest ++ "' after parsing")
 
 parseAddRequest :: Parser Query
--- parseAddRequest = and3 (\_ _ r -> AddRequest r) (parseString "add_request") parseSpace parseRequest
-
 parseAddRequest =  AddRequest <$> (parseString "add_request" *> parseSpace *> parseRequest)
 
--- >>> runParser parseRequest "1,abc,def,ghi,jkl,mno,pqr"
--- Right (Request {requestId = 1, requestType = "abc", requestOrigin = "def", items = Items ["ghi"]},",jkl,mno,pqr")
--- >>> runParser parseRequest "1,abc,def,ghi"
--- Right (Request {requestId = 1, requestType = "abc", requestOrigin = "def", items = Items ["ghi"]},"")
-
 parseListRequests :: Parser Query
--- parseListRequests s = case parseString "list_requests" s of
---   Left err -> Left err
---   Right (_, r) -> Right (ListRequests, r)
-
 parseListRequests = ListRequests <$ parseString "list_requests"
 
 parseRemoveRequest :: Parser Query
@@ -104,19 +82,15 @@ parseRemoveRequest = RemoveRequest <$> (parseString "remove_request" *> parseSpa
 
 
 parseUpdateRequest :: Parser Query
--- parseUpdateRequest = and5 (\_ _ n _ r -> UpdateRequest n r) (parseString "update_request") parseSpace parseRequestId parseSpace parseRequest
 parseUpdateRequest = UpdateRequest <$> (parseString "update_request" *> parseSpace *> parseRequestId) <*> (parseSpace *> parseRequest)
 
 parseFindRequest :: Parser Query
--- parseFindRequest = and3 (\_ _ n -> FindRequest n) (parseString "find_request") parseSpace parseRequestId
 parseFindRequest = FindRequest <$> (parseString "find_request" *> parseSpace *> parseRequestId)
 
 parseRemoveAllRequests :: Parser Query
--- parseRemoveAllRequests s = case parseString "remove_all_requests" s of
---   Left err -> Left err
---   Right (_, r) -> Right (RemoveAllRequests, r)
-
 parseRemoveAllRequests = RemoveAllRequests <$ parseString "remove_all_requests"
+
+
 
 newtype State =
   State {
@@ -172,8 +146,6 @@ parseComma :: Parser Char
 parseComma = parseChar ','
 
 parseDigit :: Parser Char
--- parseDigit [] = Left "Cannot find any digits in an empty input"
--- parseDigit s@(h : t) = if C.isDigit h then Right (h, t) else Left (s ++ " does not start with a digit")
 parseDigit = Parser $ \input -> case input of
   [] -> Left "Cannot find any digits in an empty input"
   (h : t) -> if C.isDigit h then Right (h, t) else Left (input ++ " does not start with a digit")
@@ -184,19 +156,13 @@ parseLetter = Parser $ \input -> case input of
   (h : t) -> if C.isLetter h then Right (h, t) else Left (input ++ " does not start with a letter")
 
 parseAlphaNum :: Parser Char
--- parseAlphaNum [] = Left "Cannot find any alphanumeric character in an empty input"
--- parseAlphaNum s@(h:t) = if C.isAlphaNum h then Right (h, t) else Left (s ++ " does not start with an alphanumeric character")
 parseAlphaNum = parseLetter <|> parseDigit
 
 parseString :: String -> Parser String
 parseString = foldr (\ h -> (<*>) ((:) <$> parseChar h)) (pure [])
--- parseString [] = pure []
--- parseString (h : t) = (:) <$> parseChar h <*> parseString t
 
 parseAlphaNumString :: Parser String
 parseAlphaNumString = many parseAlphaNum
-
-
 
 parseManyLetters :: Parser String
 parseManyLetters = many parseLetter
