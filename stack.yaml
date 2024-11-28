@@ -1,4 +1,4 @@
-resolver: compiler: ghc-9.4.8
+resolver: lts-21.25
 system-ghc: true
 packages:
 - .
