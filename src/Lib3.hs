@@ -17,9 +17,6 @@ import Data.Maybe (fromJust, isNothing)
 import Control.Monad (forever)
 import System.Directory (doesFileExist)
 import Control.Applicative ((<|>), many, (<*), (*>), (<$>), (<*>))
-import PrimitiveParsers
-import CommandParsers
-import RequestParsers
 
 data StorageOp = Save String (Chan ()) | Load (Chan String)
 
