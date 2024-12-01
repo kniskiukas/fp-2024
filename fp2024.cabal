@@ -25,6 +25,7 @@ source-repository head
 
 library
   exposed-modules:
+      CommandParsers
       Lessons.Lesson01
       Lessons.Lesson02
       Lessons.Lesson03
@@ -40,6 +41,8 @@ library
       Lib1
       Lib2
       Lib3
+      PrimitiveParsers
+      RequestParsers
   other-modules:
       Paths_fp2024
   autogen-modules:

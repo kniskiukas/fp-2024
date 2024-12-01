@@ -17,6 +17,9 @@ import Data.Maybe (fromJust, isNothing)
 import Control.Monad (forever)
 import System.Directory (doesFileExist)
 import Control.Applicative ((<|>), many, (<*), (*>), (<$>), (<*>))
+import PrimitiveParsers
+import CommandParsers
+import RequestParsers
 
 data StorageOp = Save String (Chan ()) | Load (Chan String)
 
@@ -51,7 +54,7 @@ data Statements = Batch [Lib2.Query] |
 instance Show Statements where
   show :: Statements -> String
   show (Single q) = renderQuery q
-  show (Batch qs) = unlines $ map renderQuery qs
+  show (Batch qs) = "BEGIN\n" ++ concatMap ((++ ";\n") . show) qs ++ "END\n"
 
 
 renderQuery :: Lib2.Query -> String
