@@ -12,7 +12,7 @@ module Lib3
 import Control.Concurrent (Chan, newChan, readChan, writeChan)
 import Control.Concurrent.STM (STM, TVar, atomically, readTVar, readTVarIO, writeTVar)
 import qualified Lib2
-import Lib2 (Parser, parseString, runParser)
+import Lib2 (Parser, parseString, parse, State (State), parseQuery)
 import Data.Maybe (fromJust, isNothing)
 import Control.Monad (forever)
 import System.Directory (doesFileExist)
@@ -29,20 +29,17 @@ data StorageOp = Save String (Chan ()) | Load (Chan String)
 storageOpLoop :: Chan StorageOp -> IO ()
 storageOpLoop opChan = forever $ do
   op <- readChan opChan
-  case op of 
+  case op of
     Save s chan -> do
-      writeFile fileName s
+      writeFile "state.txt" s
       writeChan chan ()
     Load chan -> do
-      exists <- doesFileExist fileName
+      exists <- doesFileExist "state.txt"
       if exists
         then do
-          s' <- readFile fileName
-          writeChan chan $ fromJust s'
+          s' <- readFile "state.txt"
+          writeChan chan $ Just s'
         else writeChan chan Nothing
-
-fileName :: String
-fileName = "state.txt"
 
 data Statements = Batch [Lib2.Query] |
                Single Lib2.Query
@@ -54,13 +51,7 @@ instance Show Statements where
   show (Batch qs) = "BEGIN\n" ++ concatMap ((++ ";\n") . show) qs ++ "END\n"
 
 
-renderQuery :: Lib2.Query -> String
-renderQuery (Lib2.AddRequest (Lib2.Request n t o (Lib2.Items i))) = show n ++ "," ++ t ++ "," ++ o ++ "," ++ concat i
-renderQuery Lib2.ListRequests = "list"
-renderQuery (Lib2.RemoveRequest i) = "remove," ++ show i
-renderQuery (Lib2.UpdateRequest i (Lib2.Request n t o it)) = "update," ++ show i ++ "," ++ n ++ "," ++ t ++ "," ++ o ++ "," ++ it
-renderQuery (Lib2.FindRequest i) = "find," ++ show i
-renderQuery Lib2.RemoveAllRequests = "removeall"
+
 
 
 data Command = StatementCommand Statements |
@@ -70,14 +61,24 @@ data Command = StatementCommand Statements |
 
 -- | Parses user's input.
 parseCommand :: String -> Either String (Command, String)
-parseCommand = runParser command
+parseCommand = parse (StatementCommand <$> statements <|> loadParser <|> saveParser)
 
 -- | Parses Statement.
 -- Must be used in parseCommand.
 -- Reuse Lib2 as much as you can.
 -- You can change Lib2.parseQuery signature if needed.
+parseLoad :: Parser Command
+parseLoad = do
+  _ <- parseString "load"
+  return LoadCommand
+
+parseSave :: Parser Command
+parseSave = do
+  _ <- parseString "save"
+  return SaveCommand
+
 parseStatements :: String -> Either String (Statements, String)
-parseStatements  = runParser statements
+parseStatements = parse statements
 
 -- | Converts program's state into Statements
 -- (probably a batch, but might be a single query)
@@ -90,8 +91,19 @@ marshallState (Lib2.State requests) = Batch (map Lib2.AddRequest requests)
 -- as persist program's state in a file. 
 -- Must have a property test
 -- for all s: parseStatements (renderStatements s) == Right(s, "")
+
+
+renderQuery :: Lib2.Query -> String
+renderQuery (Lib2.AddRequest (Lib2.Request n t o (Lib2.Items i))) = "add, " ++ show n ++ "," ++ t ++ "," ++ o ++ "," ++ concat i
+renderQuery Lib2.ListRequests = "list"
+renderQuery (Lib2.RemoveRequest i) = "remove," ++ show i
+renderQuery (Lib2.UpdateRequest i (Lib2.Request n t o it)) = "update," ++ show i ++ "," ++ n ++ "," ++ t ++ "," ++ o ++ "," ++ it
+renderQuery (Lib2.FindRequest i) = "find," ++ show i
+renderQuery Lib2.RemoveAllRequests = "removeall"
+
 renderStatements :: Statements -> String
-renderStatements = show
+renderStatements (Single q) = renderQuery q
+renderStatements (Batch qs) = "BEGIN\n" ++ concatMap ((++ ";\n") . renderQuery) qs ++ "END\n"
 
 -- | Updates a state according to a command.
 -- Performs file IO via ioChan if needed.
@@ -153,33 +165,18 @@ atomicStatements stateVar (Single q) = do
       writeTVar stateVar newState
       return $ Right msg
 
-
 statements :: Parser Statements
-
--- statements =
---   ( do
---       _ <- parseString "BEGIN\n"
---       qs <-
---         many
---           ( do
---               q <- Lib2.parseQuery
---               _ <- parseString ";\n"
---               return q
---           )
---       _ <- parseString "END\n"
---       return $ Batch qs
---   )
---     <|> (Single <$> Lib2.parseQuery)
-
-loadParser :: Parser Command
-loadParser = do
-  _ <- parseString "load"
-  return LoadCommand
-
-saveParser :: Parser Command
-saveParser = do
-  _ <- parseString "save"
-  return SaveCommand
-
-command :: Parser Command
-command = StatementCommand <$> statements <|> loadParser <|> saveParser
+statements =
+  ( do
+      _ <- parseLiteral "BEGIN\n"
+      q <-
+        many
+          ( do
+              q <- Lib2.parseQuery
+              _ <- parseLiteral ";\n"
+              return q
+          )
+      _ <- parseLiteral "END\n"
+      return $ Batch q
+  )
+    <|> (Single <$> Lib2.parseQuery)

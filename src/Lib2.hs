@@ -4,6 +4,7 @@
 {-# HLINT ignore "Redundant lambda" #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE LambdaCase #-}
 
 --TODO
 --Make initialization
@@ -190,6 +191,23 @@ parseAlphaNumString = many parseAlphaNum
 
 parseManyLetters :: Parser String
 parseManyLetters = many parseLetter
+
+sat :: (Char -> Bool) -> Parser Char
+sat p = P $ \case
+  [] -> Left "Empty String"
+  s@(x : xs) -> if p x then Right (x, xs) else Left $ "Could not recognize: " ++ s
+
+char :: Char -> Parser Char
+char c = sat (== c)
+
+parseChar' :: Char -> Parser Char
+parseChar' = char
+
+parseLiteral :: String -> Parser String
+parseLiteral [] = return []
+parseLiteral (x : xs) = do
+  _ <- parseChar' x
+  parseLiteral xs
 
 -- needed helpers
 -- class Functor f where
