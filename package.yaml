@@ -43,6 +43,7 @@ library:
   - QuickCheck
   - transformers
   - strict
+  - directory
 
 executables:
   fp2024-one:

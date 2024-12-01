@@ -51,12 +51,12 @@ library
       QuickCheck
     , async
     , base >=4.7 && <5
+    , directory
     , free
     , random
     , stm
     , strict
     , transformers
-    , directory-1.3.7.1
   default-language: Haskell2010
 
 executable fp2024-four-client

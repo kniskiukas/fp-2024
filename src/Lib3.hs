@@ -12,11 +12,12 @@ module Lib3
 import Control.Concurrent (Chan, newChan, readChan, writeChan)
 import Control.Concurrent.STM (STM, TVar, atomically, readTVar, readTVarIO, writeTVar)
 import qualified Lib2
-import Lib2 (Parser, parseString, parse, State (State), parseQuery)
-import Data.Maybe (fromJust, isNothing)
+import Lib2 (Parser, parseString, parse, State (State))
+-- import Data.Maybe
 import Control.Monad (forever)
 import System.Directory (doesFileExist)
-import Control.Applicative ((<|>), many, (<*), (*>), (<$>), (<*>))
+import Control.Applicative ((<|>), many)
+-- (<*), (*>), (<$>), (<*>)
 
 data StorageOp = Save String (Chan ()) | Load (Chan String)
 
@@ -31,15 +32,18 @@ storageOpLoop opChan = forever $ do
   op <- readChan opChan
   case op of
     Save s chan -> do
-      writeFile "state.txt" s
+      writeFile fileName s
       writeChan chan ()
     Load chan -> do
-      exists <- doesFileExist "state.txt"
+      exists <- doesFileExist fileName
       if exists
         then do
-          s' <- readFile "state.txt"
-          writeChan chan $ Just s'
-        else writeChan chan Nothing
+          s' <- readFile fileName
+          writeChan chan s'
+        else writeChan chan ""
+
+fileName :: String
+fileName = "state.txt"
 
 data Statements = Batch [Lib2.Query] |
                Single Lib2.Query
@@ -61,7 +65,7 @@ data Command = StatementCommand Statements |
 
 -- | Parses user's input.
 parseCommand :: String -> Either String (Command, String)
-parseCommand = parse (StatementCommand <$> statements <|> loadParser <|> saveParser)
+parseCommand = parse (StatementCommand <$> statements <|> parseLoad <|> parseSave)
 
 -- | Parses Statement.
 -- Must be used in parseCommand.
@@ -97,7 +101,7 @@ renderQuery :: Lib2.Query -> String
 renderQuery (Lib2.AddRequest (Lib2.Request n t o (Lib2.Items i))) = "add, " ++ show n ++ "," ++ t ++ "," ++ o ++ "," ++ concat i
 renderQuery Lib2.ListRequests = "list"
 renderQuery (Lib2.RemoveRequest i) = "remove," ++ show i
-renderQuery (Lib2.UpdateRequest i (Lib2.Request n t o it)) = "update," ++ show i ++ "," ++ n ++ "," ++ t ++ "," ++ o ++ "," ++ it
+renderQuery (Lib2.UpdateRequest i (Lib2.Request n t o (Lib2.Items it))) = "update," ++ show i ++ "," ++ show n ++ "," ++ t ++ "," ++ o ++ "," ++ concat it
 renderQuery (Lib2.FindRequest i) = "find," ++ show i
 renderQuery Lib2.RemoveAllRequests = "removeall"
 
@@ -124,16 +128,16 @@ stateTransition stateVar SaveCommand ioChan = do
   readChan chan
   return $ Right $ Just "State saved"
 
-stateTransition stateVar LoadCommand ioChan = do
+stateTransition s LoadCommand ioChan = do
   chan <- newChan :: IO (Chan String)
   writeChan ioChan (Load chan)
   qs <- readChan chan
-  if isNothing qs
+  if null qs
     then return (Left "No state file found")
-    else case parseStatements $ fromJust qs of
+    else case parseStatements qs of
       Left e -> do
         return $ Left $ "Failed to load from file:\n" ++ e
-      Right (qs', _) -> stateTransition stateVar (StatementCommand qs') ioChan
+      Right (qs', _) -> stateTransition s (StatementCommand qs') ioChan
 stateTransition stateVar (StatementCommand s) _ = atomically $ atomicStatements stateVar s
 
 
@@ -168,15 +172,15 @@ atomicStatements stateVar (Single q) = do
 statements :: Parser Statements
 statements =
   ( do
-      _ <- parseLiteral "BEGIN\n"
+      _ <- Lib2.parseLiteral "BEGIN\n"
       q <-
         many
           ( do
-              q <- Lib2.parseQuery
-              _ <- parseLiteral ";\n"
+              q <- Lib2.query
+              _ <- Lib2.parseLiteral ";\n"
               return q
           )
-      _ <- parseLiteral "END\n"
+      _ <- Lib2.parseLiteral "END\n"
       return $ Batch q
   )
-    <|> (Single <$> Lib2.parseQuery)
+    <|> (Single <$> Lib2.query)

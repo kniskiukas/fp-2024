@@ -26,7 +26,10 @@ module Lib2
     parseUpdateRequest,
     parseFindRequest,
     parseRemoveAllRequests,
-    Items(..)
+    Items(..),
+    parseString,
+    query,
+    parseLiteral
     ) where
 
 import qualified Data.Char as C
@@ -48,6 +51,9 @@ data Query =
   | FindRequest Int
   | RemoveAllRequests
   deriving (Eq, Show)
+
+query :: Parser Query
+query = parseAddRequest <|> parseListRequests <|> parseRemoveRequest <|> parseUpdateRequest <|> parseFindRequest <|> parseRemoveAllRequests
 
 parseQuery :: String -> Either String Query
 parseQuery s = case parse (parseAddRequest <|> parseListRequests <|> parseRemoveRequest <|> parseUpdateRequest <|> parseFindRequest <|> parseRemoveAllRequests) s of
