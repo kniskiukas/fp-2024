@@ -29,7 +29,8 @@ module Lib2
     Items(..),
     parseString,
     query,
-    parseLiteral
+    parseLiteral,
+    parseWord
     ) where
 
 import qualified Data.Char as C
@@ -69,7 +70,7 @@ parseQuery input = case parse parseTaskList input of
 parseAddRequest :: Parser Query
 
 parseAddRequest = do
-  _ <- parseString "add_request"
+  _ <- parseWord "add_request"
   _ <- parseSpace
   AddRequest <$> parseRequest
 
@@ -77,18 +78,18 @@ parseAddRequest = do
 
 parseListRequests :: Parser Query
 parseListRequests = do
-  _ <- parseString "list_requests"
+  _ <- parseWord "list_requests"
   return ListRequests
 
 parseRemoveRequest :: Parser Query
 parseRemoveRequest = do
-  _ <- parseString "remove_request"
+  _ <- parseWord "remove_request"
   _ <- parseSpace
   RemoveRequest <$> parseRequestId
 
 parseUpdateRequest :: Parser Query
 parseUpdateRequest = do
-  _ <- parseString "update_request"
+  _ <- parseWord "update_request"
   _ <- parseSpace
   i <- parseRequestId
   _ <- parseComma
@@ -96,13 +97,13 @@ parseUpdateRequest = do
 
 parseFindRequest :: Parser Query
 parseFindRequest = do
-  _ <- parseString "find_request"
+  _ <- parseWord "find_request"
   _ <- parseSpace
   FindRequest <$> parseRequestId
 
 parseRemoveAllRequests :: Parser Query
 parseRemoveAllRequests = do
-  _ <- parseString "remove_all_requests"
+  _ <- parseWord "remove_all_requests"
   return RemoveAllRequests
 
 parseTask :: Parser Query
@@ -165,6 +166,10 @@ parseRequest = do
   _ <- parseComma
   Request rid t o <$> parseItems
 
+-- >>> parse parseRequest "1,type,origin,item1,item2"
+-- ProgressCancelledException
+-- ProgressCancelledException
+
 requestByIdExists :: Int -> State -> Bool
 requestByIdExists rid s = rid `elem` map requestId (requests s)
 
@@ -190,17 +195,23 @@ stateTransition state q = case q of
   AddRequest r -> if requestExists r state
     then Left "Request already exists"
     else Right (Just "Request added", State (r : requests state))
+
   ListRequests -> Right (Just (show (requests state)), state)
+
   RemoveRequest i -> if not (requestByIdExists i state)
     then Left "Request does not exist"
     else Right (Just "Request removed", State (filter (\r -> requestId r /= i) (requests state)))
+
   RemoveAllRequests -> if null (requests state)
     then Left "No requests to remove"
     else Right (Just "All requests removed", State [])
+
   UpdateRequest i r -> if not (requestByIdExists i state)
     then Left "Request does not exist"
     else Right (Just "Request updated", State (map (\r2 -> if requestId r2 == i then r else r2) (requests state)))
+
   FindRequest i -> Right (Just (show (filter (\r -> requestId r == i) (requests state))), state)
+
   Operation qs -> foldl (\acc q' -> acc >>= \(_, st) -> stateTransition st q') (Right (Nothing, state)) qs
 
 
@@ -208,9 +219,10 @@ skipSpaces :: String -> String
 skipSpaces = dropWhile (== ' ')
 
 parseChar :: Char -> Parser Char
-parseChar c = P $ \input -> case input of
-  [] -> Left ("Cannot find " ++ [c] ++ " in an empty input")
-  (h : t) -> if h == c then Right (c, t) else Left (input ++ " does not start with " ++ [c])
+parseChar c = P $ \case
+          [] -> Left ("Cannot find " ++ [c] ++ " in an empty input")
+          s@(h : t) -> if c == h then Right (c, t)
+          else Left (c : " is not found in " ++ s)
 
 parseSpace :: Parser Char
 parseSpace = parseChar ' '
@@ -230,16 +242,36 @@ parseNumber = P $ \input ->
         then Left "Not a number"
         else Right (read digits, rest)
 
+parseWord :: String -> Parser String
+parseWord [] = P $ \input -> Right ([], input)
+parseWord (w:ws) = P $ \input ->
+    case parse (parseChar w) input of
+        Right (_, rest) -> 
+            case parse (parseWord ws) rest of 
+                Right (matched, finalRest) -> Right (w : matched, finalRest)
+                Left err -> Left err
+        Left _ -> Left ("Input does not match: expected '" ++ (w:ws) ++ "', but found '" ++ input ++ "'")
+
 parseLetter :: Parser Char
-parseLetter = P $ \input -> case input of
+parseLetter = P $ \case
   [] -> Left "Cannot find any letter in an empty input"
-  (h : t) -> if C.isLetter h then Right (h, t) else Left (input ++ " does not start with a letter")
+  s@(h : t) -> if C.isLetter h then Right (h, t)
+  else Left (s ++ " does not start with a letter")
 
 parseAlphaNum :: Parser Char
 parseAlphaNum = parseLetter <|> parseDigit
 
-parseString :: String -> Parser String
-parseString = foldr (\ h -> (<*>) ((:) <$> parseChar h)) (pure [])
+-- parseString :: String -> Parser String
+-- parseString = foldr (\ h -> (<*>) ((:) <$> parseChar h)) (pure [])
+
+parseString :: Parser String
+parseString = P $ \input ->
+    case parse parseLetter input of
+        Right (c, rest) ->
+            case parse parseString rest of
+                Right (cs, remaining) -> Right (c:cs, remaining)
+                Left _ -> Right ([c], rest)  -- Stop after first letter if no more letters can be parsed
+        Left err -> Left err 
 
 
 parseAlphaNumString :: Parser String

@@ -1,4 +1,5 @@
 {-# LANGUAGE InstanceSigs #-}
+
 module Lib3
     ( stateTransition,
     StorageOp (..),
@@ -14,7 +15,7 @@ import Control.Concurrent (Chan, newChan, readChan, writeChan)
 import Control.Concurrent.STM (TVar, readTVar, readTVarIO, writeTVar)
 import Control.Monad.STM
 import qualified Lib2
-import Lib2 (Parser, parseString, parse, State (State))
+import Lib2 (Parser, parse, State (State))
 -- import Data.Maybe
 import Control.Monad (forever)
 import System.Directory (doesFileExist)
@@ -75,12 +76,12 @@ parseCommand = parse (StatementCommand <$> statements <|> parseLoad <|> parseSav
 -- You can change Lib2.parseQuery signature if needed.
 parseLoad :: Parser Command
 parseLoad = do
-  _ <- parseString "load"
+  _ <- Lib2.parseWord "load"
   return LoadCommand
 
 parseSave :: Parser Command
 parseSave = do
-  _ <- parseString "save"
+  _ <- Lib2.parseWord "save"
   return SaveCommand
 
 parseStatements :: String -> Either String (Statements, String)
