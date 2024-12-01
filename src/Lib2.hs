@@ -153,10 +153,18 @@ parseItems :: Parser Items
 parseItems = parseMultipleItems <|> parseSingleItem
 
 parseRequestId :: Parser Int
-parseRequestId = read <$> many parseDigit
+parseRequestId = do
+  parseNumber
 
 parseRequest :: Parser Request
-parseRequest = Request <$> (parseRequestId <* parseComma) <*> (many parseLetter <* parseComma) <*> (many parseLetter <* parseComma) <*> parseItems
+parseRequest = do
+  rid <- parseRequestId
+  _ <- parseComma
+  t <- many parseLetter
+  _ <- parseComma
+  o <- many parseLetter
+  _ <- parseComma
+  Request rid t o <$> parseItems
 
 requestByIdExists :: Int -> State -> Bool
 requestByIdExists rid s = rid `elem` map requestId (requests s)
@@ -197,6 +205,8 @@ stateTransition state q = case q of
   Operation qs -> foldl (\acc q' -> acc >>= \(_, st) -> stateTransition st q') (Right (Nothing, state)) qs
 
 
+skipSpaces :: String -> String
+skipSpaces = dropWhile (== ' ')
 
 parseChar :: Char -> Parser Char
 parseChar c = P $ \input -> case input of
@@ -213,6 +223,13 @@ parseDigit :: Parser Char
 parseDigit = P $ \input -> case input of
   [] -> Left "Cannot find any digits in an empty input"
   (h : t) -> if C.isDigit h then Right (h, t) else Left (input ++ " does not start with a digit")
+
+parseNumber :: Parser Int
+parseNumber = P $ \input ->
+  let (digits, rest) = span C.isDigit (skipSpaces input)
+   in if null digits
+        then Left "Not a number"
+        else Right (read digits, rest)
 
 parseLetter :: Parser Char
 parseLetter = P $ \input -> case input of

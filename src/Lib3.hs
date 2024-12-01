@@ -155,19 +155,19 @@ transitionThroughList state (q:qs) = case Lib2.stateTransition state q of
 
 
 atomicStatements :: TVar Lib2.State -> Statements -> STM (Either String (Maybe String))
-atomicStatements stateVar (Batch qs) = do
-  state <- readTVar stateVar
-  case transitionThroughList state qs of 
+atomicStatements s (Batch qs) = do
+  s' <- readTVar s
+  case transitionThroughList s' qs of
     Left e -> return $ Left e
-    Right (msg, newState) -> do
-      writeTVar stateVar newState
+    Right (msg, ns) -> do
+      writeTVar s ns
       return $ Right msg
-atomicStatements stateVar (Single q) = do
-  state <- readTVar stateVar
-  case Lib2.stateTransition state q of
+atomicStatements s (Single q) = do
+  s' <- readTVar s
+  case Lib2.stateTransition s' q of
     Left e -> return $ Left e
-    Right (msg, newState) -> do
-      writeTVar stateVar newState
+    Right (msg, ns) -> do
+      writeTVar s ns
       return $ Right msg
 
 statements :: Parser Statements
