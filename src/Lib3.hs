@@ -6,11 +6,13 @@ module Lib3
     parseCommand,
     parseStatements,
     marshallState,
-    renderStatements
+    renderStatements,
+    Statements(..)
     ) where
 
 import Control.Concurrent (Chan, newChan, readChan, writeChan)
-import Control.Concurrent.STM (STM, TVar, atomically, readTVar, readTVarIO, writeTVar)
+import Control.Concurrent.STM (TVar, readTVar, readTVarIO, writeTVar)
+import Control.Monad.STM
 import qualified Lib2
 import Lib2 (Parser, parseString, parse, State (State))
 -- import Data.Maybe

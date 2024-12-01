@@ -1,4 +1,5 @@
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# LANGUAGE InstanceSigs #-}
 import Test.Tasty ( TestTree, defaultMain, testGroup )
 import Test.Tasty.HUnit ( testCase, (@?=) )
 import Test.Tasty.QuickCheck as QC
@@ -15,6 +16,30 @@ main = defaultMain tests
 
 tests :: TestTree
 tests = testGroup "Tests" [unitTests, propertyTests]
+
+instance Arbitrary Lib2.Query where
+    arbitrary :: Gen Lib2.Query
+    arbitrary = oneof
+        [ Lib2.AddRequest <$> arbitrary
+        , return Lib2.ListRequests
+        , Lib2.RemoveRequest <$> arbitrary
+        , Lib2.UpdateRequest <$> arbitrary <*> arbitrary
+        , Lib2.FindRequest <$> arbitrary
+        , return Lib2.RemoveAllRequests
+        , Lib2.Operation <$> arbitrary
+        ]
+
+instance Arbitrary Lib2.Request where
+    arbitrary :: Gen Lib2.Request
+    arbitrary = Lib2.Request <$> arbitrary <*> arbitrary <*> arbitrary <*> arbitrary
+
+instance Arbitrary Lib2.Items where
+    arbitrary :: Gen Lib2.Items
+    arbitrary = Lib2.Items <$> arbitrary
+
+instance Arbitrary Lib3.Statements where
+    arbitrary :: Gen Lib3.Statements
+    arbitrary = oneof [Lib3.Single <$> arbitrary, Lib3.Batch <$> listOf arbitrary]
 
 unitTests :: TestTree
 unitTests = testGroup "Lib1 and Lib2 tests"

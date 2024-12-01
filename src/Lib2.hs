@@ -73,6 +73,8 @@ parseAddRequest = do
   _ <- parseSpace
   AddRequest <$> parseRequest
 
+
+
 parseListRequests :: Parser Query
 parseListRequests = do
   _ <- parseString "list_requests"
@@ -101,9 +103,6 @@ parseFindRequest = do
 parseRemoveAllRequests :: Parser Query
 parseRemoveAllRequests = do
   _ <- parseString "remove_all_requests"
--- Variable not in scope:
---   testParseAddRequest :: String -> t_a2nzn[sk:1]
--- ProgressCancelledException
   return RemoveAllRequests
 
 parseTask :: Parser Query
