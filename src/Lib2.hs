@@ -50,34 +50,77 @@ data Query =
   | UpdateRequest Int Request
   | FindRequest Int
   | RemoveAllRequests
+  | Operation [Query]
   deriving (Eq, Show)
 
 query :: Parser Query
 query = parseAddRequest <|> parseListRequests <|> parseRemoveRequest <|> parseUpdateRequest <|> parseFindRequest <|> parseRemoveAllRequests
 
 parseQuery :: String -> Either String Query
-parseQuery s = case parse (parseAddRequest <|> parseListRequests <|> parseRemoveRequest <|> parseUpdateRequest <|> parseFindRequest <|> parseRemoveAllRequests) s of
-  Left err -> Left err
-  Right (result, rest) -> if null rest then Right result else Left ("Unexpected '" ++ rest ++ "' after parsing")
+parseQuery input = case parse parseTaskList input of
+  Right (qs, r) ->
+      if null r
+        then case qs of
+          [q] -> Right q
+          _ -> Right (Operation qs)
+        else Left ("Unrecognized characters: " ++ r)
+  _ -> Left "Failed to parse query: Unknown command"
 
 parseAddRequest :: Parser Query
-parseAddRequest =  AddRequest <$> (parseString "add_request" *> parseSpace *> parseRequest)
+
+parseAddRequest = do
+  _ <- parseString "add_request"
+  _ <- parseSpace
+  AddRequest <$> parseRequest
 
 parseListRequests :: Parser Query
-parseListRequests = ListRequests <$ parseString "list_requests"
+parseListRequests = do
+  _ <- parseString "list_requests"
+  return ListRequests
 
 parseRemoveRequest :: Parser Query
-parseRemoveRequest = RemoveRequest <$> (parseString "remove_request" *> parseSpace *> parseRequestId)
-
+parseRemoveRequest = do
+  _ <- parseString "remove_request"
+  _ <- parseSpace
+  RemoveRequest <$> parseRequestId
 
 parseUpdateRequest :: Parser Query
-parseUpdateRequest = UpdateRequest <$> (parseString "update_request" *> parseSpace *> parseRequestId) <*> (parseSpace *> parseRequest)
+parseUpdateRequest = do
+  _ <- parseString "update_request"
+  _ <- parseSpace
+  i <- parseRequestId
+  _ <- parseComma
+  UpdateRequest i <$> parseRequest
 
 parseFindRequest :: Parser Query
-parseFindRequest = FindRequest <$> (parseString "find_request" *> parseSpace *> parseRequestId)
+parseFindRequest = do
+  _ <- parseString "find_request"
+  _ <- parseSpace
+  FindRequest <$> parseRequestId
 
 parseRemoveAllRequests :: Parser Query
-parseRemoveAllRequests = RemoveAllRequests <$ parseString "remove_all_requests"
+parseRemoveAllRequests = do
+  _ <- parseString "remove_all_requests"
+-- Variable not in scope:
+--   testParseAddRequest :: String -> t_a2nzn[sk:1]
+-- ProgressCancelledException
+  return RemoveAllRequests
+
+parseTask :: Parser Query
+parseTask = parseAddRequest <|> parseListRequests <|> parseRemoveRequest <|> parseUpdateRequest <|> parseFindRequest <|> parseRemoveAllRequests
+
+parseTaskList :: Parser [Query]
+parseTaskList = do
+  firstQuery <- parseTask
+  rest <- optional (parseChar ';' >> parseTaskList)
+  return $ case rest of
+    Just otherQueries -> firstQuery : otherQueries
+    Nothing -> [firstQuery]
+
+parseOperation :: Parser Query
+parseOperation = do
+  Operation <$> parseTaskList
+
 
 data Request = Request {
   requestId :: Int,
@@ -136,29 +179,22 @@ emptyState :: State
 emptyState = State []
 
 stateTransition :: State -> Query -> Either String (Maybe String, State)
-stateTransition s (AddRequest r) =
-  if requestExists r s
+stateTransition state q = case q of
+  AddRequest r -> if requestExists r state
     then Left "Request already exists"
-    else Right (Just "Request added", State (r : requests s))
-
-stateTransition s ListRequests = Right (Just (show (requests s)), s)
-
-stateTransition s (RemoveRequest i) =
-  if not (requestByIdExists i s)
+    else Right (Just "Request added", State (r : requests state))
+  ListRequests -> Right (Just (show (requests state)), state)
+  RemoveRequest i -> if not (requestByIdExists i state)
     then Left "Request does not exist"
-    else Right (Just "Request removed", State (filter (\r -> requestId r /= i) (requests s)))
-
-stateTransition s RemoveAllRequests =
-  if null (requests s)
+    else Right (Just "Request removed", State (filter (\r -> requestId r /= i) (requests state)))
+  RemoveAllRequests -> if null (requests state)
     then Left "No requests to remove"
     else Right (Just "All requests removed", State [])
-
-stateTransition s (UpdateRequest i r) =
-  if not (requestByIdExists i s)
+  UpdateRequest i r -> if not (requestByIdExists i state)
     then Left "Request does not exist"
-    else Right (Just "Request updated", State (map (\r2 -> if requestId r2 == i then r else r2) (requests s)))
-
-stateTransition s (FindRequest i) = Right (Just (show (filter (\r -> requestId r == i) (requests s))), s)
+    else Right (Just "Request updated", State (map (\r2 -> if requestId r2 == i then r else r2) (requests state)))
+  FindRequest i -> Right (Just (show (filter (\r -> requestId r == i) (requests state))), state)
+  Operation qs -> foldl (\acc q' -> acc >>= \(_, st) -> stateTransition st q') (Right (Nothing, state)) qs
 
 
 

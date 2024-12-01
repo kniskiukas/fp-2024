@@ -104,6 +104,7 @@ renderQuery (Lib2.RemoveRequest i) = "remove," ++ show i
 renderQuery (Lib2.UpdateRequest i (Lib2.Request n t o (Lib2.Items it))) = "update," ++ show i ++ "," ++ show n ++ "," ++ t ++ "," ++ o ++ "," ++ concat it
 renderQuery (Lib2.FindRequest i) = "find," ++ show i
 renderQuery Lib2.RemoveAllRequests = "removeall"
+renderQuery (Lib2.Operation _) = "operation"
 
 renderStatements :: Statements -> String
 renderStatements (Single q) = renderQuery q
