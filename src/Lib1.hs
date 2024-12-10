@@ -7,10 +7,12 @@ module Lib1
 completions :: [String]
 completions = [
     -- actions
-    "add_request",
-    "remove_request",
+    "add_request id,type,origin,item1,item2,...",
+    "remove_request id",
     "list_requests",
-    "find_request",
-    "update_request",
-    "remove_all_requests"
+    "find_request id",
+    "update_request id, id,type,origin,item1,item2,...",
+    "remove_all_requests",
+    "save",
+    "load"
     ]

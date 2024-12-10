@@ -55,7 +55,7 @@ data Statements = Batch [Lib2.Query] |
 instance Show Statements where
   show :: Statements -> String
   show (Single q) = renderQuery q
-  show (Batch qs) = "BEGIN\n" ++ concatMap ((++ ";\n") . show) qs ++ "END\n"
+  show (Batch qs) = "BEGIN\n" ++ concatMap ((++ ";\n") . renderQuery) qs ++ "END\n"
 
 
 
@@ -68,7 +68,7 @@ data Command = StatementCommand Statements |
 
 -- | Parses user's input.
 parseCommand :: String -> Either String (Command, String)
-parseCommand = parse (StatementCommand <$> statements <|> parseLoad <|> parseSave)
+parseCommand = parse (parseLoad <|> parseSave <|> StatementCommand <$> statements)
 
 -- | Parses Statement.
 -- Must be used in parseCommand.
@@ -101,13 +101,17 @@ marshallState (Lib2.State requests) = Batch (map Lib2.AddRequest requests)
 
 
 renderQuery :: Lib2.Query -> String
-renderQuery (Lib2.AddRequest (Lib2.Request n t o (Lib2.Items i))) = "add, " ++ show n ++ "," ++ t ++ "," ++ o ++ "," ++ concat i
-renderQuery Lib2.ListRequests = "list"
-renderQuery (Lib2.RemoveRequest i) = "remove," ++ show i
-renderQuery (Lib2.UpdateRequest i (Lib2.Request n t o (Lib2.Items it))) = "update," ++ show i ++ "," ++ show n ++ "," ++ t ++ "," ++ o ++ "," ++ concat it
-renderQuery (Lib2.FindRequest i) = "find," ++ show i
-renderQuery Lib2.RemoveAllRequests = "removeall"
+renderQuery (Lib2.AddRequest (Lib2.Request n t o (Lib2.Items i))) = "add_request " ++ show n ++ "," ++ t ++ "," ++ o ++ renderItems i
+renderQuery Lib2.ListRequests = "list_requests"
+renderQuery (Lib2.RemoveRequest i) = "remove_request " ++ show i
+renderQuery (Lib2.UpdateRequest i (Lib2.Request n t o (Lib2.Items it))) = "update_request " ++ show i ++ ", " ++ show n ++ "," ++ t ++ "," ++ o ++ "," ++ concat it
+renderQuery (Lib2.FindRequest i) = "find_request " ++ show i
+renderQuery Lib2.RemoveAllRequests = "remove_all_requests"
 renderQuery (Lib2.Operation _) = "operation"
+
+renderItems :: [String] -> String
+renderItems [] = "" 
+renderItems items = concatMap (\item -> "," ++ item) items
 
 renderStatements :: Statements -> String
 renderStatements (Single q) = renderQuery q
@@ -177,14 +181,13 @@ statements :: Parser Statements
 statements =
   ( do
       _ <- Lib2.parseLiteral "BEGIN\n"
-      q <-
-        many
-          ( do
-              q <- Lib2.query
-              _ <- Lib2.parseLiteral ";\n"
-              return q
-          )
+      qs <- many
+              ( do
+                  q <- Lib2.query
+                  _ <- Lib2.parseLiteral ";\n"
+                  return q
+              )
       _ <- Lib2.parseLiteral "END\n"
-      return $ Batch q
+      return $ Batch qs
   )
-    <|> (Single <$> Lib2.query)
+  <|> (Single <$> Lib2.query)

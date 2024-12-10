@@ -93,6 +93,7 @@ parseUpdateRequest = do
   _ <- parseSpace
   i <- parseRequestId
   _ <- parseComma
+  _ <- parseSpace
   UpdateRequest i <$> parseRequest
 
 parseFindRequest :: Parser Query
@@ -143,7 +144,7 @@ parseMultipleItems :: Parser Items
 parseMultipleItems = do
   i <- parseSingleItem
   _ <- parseComma
-  is <- parseMultipleItems
+  is <- parseItems
   case (i, is) of
     (Items i', Items is') -> return $ Items (i' ++ is')
 
@@ -299,6 +300,46 @@ parseLiteral (x : xs) = do
   _ <- parseChar' x
   parseLiteral xs
 
+
+
+
+instance Functor Parser where
+  fmap :: (a -> b) -> Parser a -> Parser b
+  fmap f (P p) = P $ \input -> case p input of
+    Left err -> Left err
+    Right (result, rest) -> Right (f result, rest)
+
+
+instance Applicative Parser where
+  pure :: a -> Parser a
+  pure x = P $ \input -> Right (x, input)
+
+  (<*>) :: Parser (a -> b) -> Parser a -> Parser b
+  (P pf) <*> (P px) = P $ \input -> case pf input of
+    Left err -> Left err
+    Right (f, rest) -> case px rest of
+      Left err -> Left err
+      Right (x, rest') -> Right (f x, rest')
+
+instance Monad Parser where
+  return :: a -> Parser a
+  return = pure
+
+  (>>=) :: Parser a -> (a -> Parser b) -> Parser b
+  (P p) >>= f = P $ \input -> case p input of
+    Left err -> Left err
+    Right (result, rest) -> parse (f result) rest
+
+
+instance Alternative Parser where
+  empty :: Parser a
+  empty = P $ \_ -> Left "Failed to parse"
+
+  (<|>) :: Parser a -> Parser a -> Parser a
+  (P p1) <|> (P p2) = P $ \input -> case p1 input of
+    Right result -> Right result
+    Left _ -> p2 input
+
 -- needed helpers
 -- class Functor f where
 --   fmap :: (a -> b) -> f a -> f b
@@ -307,32 +348,32 @@ parseLiteral (x : xs) = do
 --   (>>=) :: f a -> (a -> f b) -> f b
 --   (>>) :: f a -> f b -> f b
 
-instance Functor Parser where
-  fmap :: (a -> b) -> Parser a -> Parser b
-  fmap f p = do
-    f <$> p
+-- instance Functor Parser where
+--   fmap :: (a -> b) -> Parser a -> Parser b
+--   fmap f p = do
+--     f <$> p
 
-instance Applicative Parser where
-  pure :: a -> Parser a
-  pure x = P $ \str -> Right (x, str)
-  (<*>) :: Parser (a -> b) -> Parser a -> Parser b
-  pf <*> pa = do
-    f <- pf
-    f <$> pa
+-- instance Applicative Parser where
+--   pure :: a -> Parser a
+--   pure x = P $ \str -> Right (x, str)
+--   (<*>) :: Parser (a -> b) -> Parser a -> Parser b
+--   pf <*> pa = do
+--     f <- pf
+--     f <$> pa
 
-instance Alternative Parser where
-  empty :: Parser a
-  empty = P $ \_ -> Left "Failed to parse"
-  (<|>) :: Parser a -> Parser a -> Parser a
-  (<|>) p1 p2 = P $ \str -> case parse p1 str of
-    Right (v, r) -> Right (v, r)
-    Left _ -> parse p2 str
+-- instance Alternative Parser where
+--   empty :: Parser a
+--   empty = P $ \_ -> Left "Failed to parse"
+--   (<|>) :: Parser a -> Parser a -> Parser a
+--   (<|>) p1 p2 = P $ \str -> case parse p1 str of
+--     Right (v, r) -> Right (v, r)
+--     Left _ -> parse p2 str
 
-instance Monad Parser where
-  (>>=) :: Parser a -> (a -> Parser b) -> Parser b
-  (>>=) pa f = P $ \str -> case parse pa str of
-    Left e -> Left e
-    Right (a, r) -> parse (f a) r
+-- instance Monad Parser where
+--   (>>=) :: Parser a -> (a -> Parser b) -> Parser b
+--   (>>=) pa f = P $ \str -> case parse pa str of
+--     Left e -> Left e
+--     Right (a, r) -> parse (f a) r
 
 
 

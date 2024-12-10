@@ -1,3 +1,11 @@
+remove_all_requests
+list_requests
+load
+list_requests
+list_requests
+add_request 1,asd,asd,asd,asd
+:paste
+add_request 1,asd,asd,asd,asd
 clear
 add_request 1,type,origin,item1,item2
 remove_all_requests
