@@ -83,9 +83,11 @@ parseSave :: Parser Command
 parseSave = do
   _ <- Lib2.parseWord "save"
   return SaveCommand
-
+  
 parseStatements :: String -> Either String (Statements, String)
-parseStatements = parse statements
+parseStatements str = case parse statements str of
+  (Left err, _) -> Left err
+  (Right s, r) -> Right (s, r)
 
 -- | Converts program's state into Statements
 -- (probably a batch, but might be a single query)

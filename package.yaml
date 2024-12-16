@@ -45,6 +45,8 @@ library:
   - transformers
   - strict
   - directory
+  - mtl
+  - free
 
 executables:
   fp2024-one:

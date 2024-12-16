@@ -36,11 +36,17 @@ module Lib2
 import qualified Data.Char as C
 import Control.Applicative
 
--- newtype Parser a = Parser {
---     runParser :: String -> Either String (a, String)
--- }
-newtype Parser a where
-  P :: { parse :: String -> Either String (a, String) } -> Parser a
+import Control.Monad.Trans.Class (MonadTrans (..))
+import Control.Monad.Trans.Except (ExceptT, catchE, runExceptT, throwE)
+import Control.Monad.Trans.State (State, get, put, runState)
+
+type Parser a = ExceptT String (Control.Monad.Trans.State.State String) a
+
+parse :: Parser a -> String -> (Either String a, String)
+parse parser = runState (runExceptT parser)
+
+-- newtype Parser a where
+--   P :: { parse :: String -> Either String (a, String) } -> Parser a
 
 
 
@@ -220,10 +226,9 @@ skipSpaces :: String -> String
 skipSpaces = dropWhile (== ' ')
 
 parseChar :: Char -> Parser Char
-parseChar c = P $ \case
-          [] -> Left ("Cannot find " ++ [c] ++ " in an empty input")
-          s@(h : t) -> if c == h then Right (c, t)
-          else Left (c : " is not found in " ++ s)
+parseChar c = ExceptT $ state $ \case
+  [] -> (Left ("Cannot find " ++ [c] ++ " in an empty input"), [])
+  s@(h : t) -> if c == h then (Right c, t) else (Left (c : " is not found in " ++ s), s)
 
 parseSpace :: Parser Char
 parseSpace = parseChar ' '
@@ -232,64 +237,54 @@ parseComma :: Parser Char
 parseComma = parseChar ','
 
 parseDigit :: Parser Char
-parseDigit = P $ \input -> case input of
-  [] -> Left "Cannot find any digits in an empty input"
-  (h : t) -> if C.isDigit h then Right (h, t) else Left (input ++ " does not start with a digit")
+parseDigit = ExceptT $ state $ \input -> case input of
+  [] -> (Left "Cannot find any digits in an empty input", [])
+  (h : t) -> if C.isDigit h then (Right h, t) else (Left (input ++ " does not start with a digit"), input)
 
 parseNumber :: Parser Int
-parseNumber = P $ \input ->
+parseNumber = ExceptT $ state $ \input ->
   let (digits, rest) = span C.isDigit (skipSpaces input)
    in if null digits
-        then Left "Not a number"
-        else Right (read digits, rest)
+        then (Left "Not a number", input)
+        else (Right (read digits), rest)
 
 parseWord :: String -> Parser String
-parseWord [] = P $ \input -> Right ([], input)
-parseWord (w:ws) = P $ \input ->
-    case parse (parseChar w) input of
-        Right (_, rest) -> 
-            case parse (parseWord ws) rest of 
-                Right (matched, finalRest) -> Right (w : matched, finalRest)
-                Left err -> Left err
-        Left _ -> Left ("Input does not match: expected '" ++ (w:ws) ++ "', but found '" ++ input ++ "'")
+parseWord [] = return []
+parseWord (w:ws) = do
+  _ <- parseChar w
+  parseWord ws
 
 parseLetter :: Parser Char
-parseLetter = P $ \case
-  [] -> Left "Cannot find any letter in an empty input"
-  s@(h : t) -> if C.isLetter h then Right (h, t)
-  else Left (s ++ " does not start with a letter")
+parseLetter = ExceptT $ state $ \case
+  [] -> (Left "Cannot find any letter in an empty input", [])
+  s@(h : t) -> if C.isLetter h then (Right h, t) else (Left (s ++ " does not start with a letter"), s)
 
 parseAlphaNum :: Parser Char
 parseAlphaNum = parseLetter <|> parseDigit
 
--- parseString :: String -> Parser String
--- parseString = foldr (\ h -> (<*>) ((:) <$> parseChar h)) (pure [])
-
 parseString :: Parser String
-parseString = P $ \input ->
-    case parse parseLetter input of
-        Right (c, rest) ->
-            case parse parseString rest of
-                Right (cs, remaining) -> Right (c:cs, remaining)
-                Left _ -> Right ([c], rest)  -- Stop after first letter if no more letters can be parsed
-        Left err -> Left err 
-
+parseString = many parseLetter
 
 parseAlphaNumString :: Parser String
 parseAlphaNumString = many parseAlphaNum
-
-
 
 parseManyLetters :: Parser String
 parseManyLetters = many parseLetter
 
 sat :: (Char -> Bool) -> Parser Char
-sat p = P $ \case
-  [] -> Left "Empty String"
-  s@(x : xs) -> if p x then Right (x, xs) else Left $ "Could not recognize: " ++ s
+sat p = do
+  input <- lift get
+  case input of
+    [] -> throwE "Parser received empty input."
+    (x : xs) ->
+      if p x
+        then lift $ put xs >> return x
+        else
+          throwE $ "Parser error at: \"" ++ input ++ "\""
+
 
 char :: Char -> Parser Char
-char c = sat (== c)
+char c = catchE (sat (== c)) (\err -> throwE $ ('\'' : c : '\'' : " could not be parsed. ") ++ err)
 
 parseChar' :: Char -> Parser Char
 parseChar' = char
@@ -303,42 +298,42 @@ parseLiteral (x : xs) = do
 
 
 
-instance Functor Parser where
-  fmap :: (a -> b) -> Parser a -> Parser b
-  fmap f (P p) = P $ \input -> case p input of
-    Left err -> Left err
-    Right (result, rest) -> Right (f result, rest)
+-- instance Functor Parser where
+--   fmap :: (a -> b) -> Parser a -> Parser b
+--   fmap f (P p) = P $ \input -> case p input of
+--     Left err -> Left err
+--     Right (result, rest) -> Right (f result, rest)
 
 
-instance Applicative Parser where
-  pure :: a -> Parser a
-  pure x = P $ \input -> Right (x, input)
+-- instance Applicative Parser where
+--   pure :: a -> Parser a
+--   pure x = P $ \input -> Right (x, input)
 
-  (<*>) :: Parser (a -> b) -> Parser a -> Parser b
-  (P pf) <*> (P px) = P $ \input -> case pf input of
-    Left err -> Left err
-    Right (f, rest) -> case px rest of
-      Left err -> Left err
-      Right (x, rest') -> Right (f x, rest')
+--   (<*>) :: Parser (a -> b) -> Parser a -> Parser b
+--   (P pf) <*> (P px) = P $ \input -> case pf input of
+--     Left err -> Left err
+--     Right (f, rest) -> case px rest of
+--       Left err -> Left err
+--       Right (x, rest') -> Right (f x, rest')
 
-instance Monad Parser where
-  return :: a -> Parser a
-  return = pure
+-- instance Monad Parser where
+--   return :: a -> Parser a
+--   return = pure
 
-  (>>=) :: Parser a -> (a -> Parser b) -> Parser b
-  (P p) >>= f = P $ \input -> case p input of
-    Left err -> Left err
-    Right (result, rest) -> parse (f result) rest
+--   (>>=) :: Parser a -> (a -> Parser b) -> Parser b
+--   (P p) >>= f = P $ \input -> case p input of
+--     Left err -> Left err
+--     Right (result, rest) -> parse (f result) rest
 
 
-instance Alternative Parser where
-  empty :: Parser a
-  empty = P $ \_ -> Left "Failed to parse"
+-- instance Alternative Parser where
+--   empty :: Parser a
+--   empty = P $ \_ -> Left "Failed to parse"
 
-  (<|>) :: Parser a -> Parser a -> Parser a
-  (P p1) <|> (P p2) = P $ \input -> case p1 input of
-    Right result -> Right result
-    Left _ -> p2 input
+--   (<|>) :: Parser a -> Parser a -> Parser a
+--   (P p1) <|> (P p2) = P $ \input -> case p1 input of
+--     Right result -> Right result
+--     Left _ -> p2 input
 
 -- needed helpers
 -- class Functor f where
