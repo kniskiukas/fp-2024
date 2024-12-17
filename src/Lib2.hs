@@ -2,7 +2,7 @@
 {-# OPTIONS_GHC -Wno-unused-top-binds -Wname-shadowing #-}
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Redundant lambda" #-}
-{-# LANGUAGE InstanceSigs #-}
+
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE LambdaCase #-}
 
@@ -15,7 +15,8 @@
 module Lib2
     ( Query(..),
     parseQuery,
-    Parser(..),
+    Parser,
+    parse,
     State(..),
     Request(..),
     emptyState,
@@ -37,13 +38,13 @@ import qualified Data.Char as C
 import Control.Applicative
 
 import Control.Monad.Trans.Class (MonadTrans (..))
-import Control.Monad.Trans.Except (ExceptT, catchE, runExceptT, throwE)
-import Control.Monad.Trans.State (State, get, put, runState)
+import Control.Monad.Trans.Except (ExceptT (..), catchE, runExceptT, throwE)
+import qualified Control.Monad.Trans.State as S (State, get, put, runState, state)
 
-type Parser a = ExceptT String (Control.Monad.Trans.State.State String) a
+type Parser a = ExceptT String (S.State String) a
 
 parse :: Parser a -> String -> (Either String a, String)
-parse parser = runState (runExceptT parser)
+parse parser = S.runState (runExceptT parser)
 
 -- newtype Parser a where
 --   P :: { parse :: String -> Either String (a, String) } -> Parser a
@@ -64,14 +65,10 @@ query :: Parser Query
 query = parseAddRequest <|> parseListRequests <|> parseRemoveRequest <|> parseUpdateRequest <|> parseFindRequest <|> parseRemoveAllRequests
 
 parseQuery :: String -> Either String Query
-parseQuery input = case parse parseTaskList input of
-  Right (qs, r) ->
-      if null r
-        then case qs of
-          [q] -> Right q
-          _ -> Right (Operation qs)
-        else Left ("Unrecognized characters: " ++ r)
-  _ -> Left "Failed to parse query: Unknown command"
+parseQuery s =
+  case parse query s of
+    (Left _, _) -> Left $ "Could not recognize: " ++ s
+    (Right q, r) -> if null r then Right q else Left ("Unrecognized characters:" ++ r)
 
 parseAddRequest :: Parser Query
 
@@ -226,7 +223,7 @@ skipSpaces :: String -> String
 skipSpaces = dropWhile (== ' ')
 
 parseChar :: Char -> Parser Char
-parseChar c = ExceptT $ state $ \case
+parseChar c = ExceptT $ S.state $ \case
   [] -> (Left ("Cannot find " ++ [c] ++ " in an empty input"), [])
   s@(h : t) -> if c == h then (Right c, t) else (Left (c : " is not found in " ++ s), s)
 
@@ -237,12 +234,12 @@ parseComma :: Parser Char
 parseComma = parseChar ','
 
 parseDigit :: Parser Char
-parseDigit = ExceptT $ state $ \input -> case input of
+parseDigit = ExceptT $ S.state $ \input -> case input of
   [] -> (Left "Cannot find any digits in an empty input", [])
   (h : t) -> if C.isDigit h then (Right h, t) else (Left (input ++ " does not start with a digit"), input)
 
 parseNumber :: Parser Int
-parseNumber = ExceptT $ state $ \input ->
+parseNumber = ExceptT $ S.state $ \input ->
   let (digits, rest) = span C.isDigit (skipSpaces input)
    in if null digits
         then (Left "Not a number", input)
@@ -255,7 +252,7 @@ parseWord (w:ws) = do
   parseWord ws
 
 parseLetter :: Parser Char
-parseLetter = ExceptT $ state $ \case
+parseLetter = ExceptT $ S.state $ \case
   [] -> (Left "Cannot find any letter in an empty input", [])
   s@(h : t) -> if C.isLetter h then (Right h, t) else (Left (s ++ " does not start with a letter"), s)
 
@@ -273,12 +270,12 @@ parseManyLetters = many parseLetter
 
 sat :: (Char -> Bool) -> Parser Char
 sat p = do
-  input <- lift get
+  input <- lift S.get
   case input of
     [] -> throwE "Parser received empty input."
     (x : xs) ->
       if p x
-        then lift $ put xs >> return x
+        then lift $ S.put xs >> return x
         else
           throwE $ "Parser error at: \"" ++ input ++ "\""
 

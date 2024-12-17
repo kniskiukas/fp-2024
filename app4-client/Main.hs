@@ -39,7 +39,7 @@ addRequest :: Request -> RestaurantProgram ()
 addRequest req = liftF $ AddRequest req ()
 
 listRequests :: RestaurantProgram [Request]
-listRequests = liftF $ ListRequests
+listRequests = liftF ListRequests
 
 removeRequest :: Int -> RestaurantProgram ()
 removeRequest id = liftF $ RemoveRequest id ()
@@ -67,10 +67,10 @@ interpretorSingleRequest (Free step) = do
     where
     runStep :: MyDomainAlgebra a -> IO a
     runStep (AddRequest req next) = sendSingleStatement (Lib2.AddRequest req) >> return next
-    runStep (ListRequests next) = sendSingleStatement Lib2.ListRequests >>= return . next
+    runStep (ListRequests next) = sendSingleStatement Lib2.ListRequests >> return . next
     runStep (RemoveRequest id next) = sendSingleStatement (Lib2.RemoveRequest id) >> return next
     runStep (UpdateRequest id req next) = sendSingleStatement (Lib2.UpdateRequest id req) >> return next
-    runStep (FindRequest id next) = sendSingleStatement (Lib2.FindRequest id) >>= return . next
+    runStep (FindRequest id next) = sendSingleStatement (Lib2.FindRequest id) >> return . next
     runStep (RemoveAllRequests next) = sendSingleStatement Lib2.RemoveAllRequests >> return next
     runStep (Operation queries next) = sendMultipleStatements queries >> return next
     runStep (Save next) = postAsString "save" >> return next

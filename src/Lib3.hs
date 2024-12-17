@@ -67,7 +67,7 @@ data Command = StatementCommand Statements |
                deriving (Eq)
 
 -- | Parses user's input.
-parseCommand :: String -> Either String (Command, String)
+parseCommand :: String -> (Either String Command, String)
 parseCommand = parse (parseLoad <|> parseSave <|> StatementCommand <$> statements)
 
 -- | Parses Statement.
@@ -83,7 +83,7 @@ parseSave :: Parser Command
 parseSave = do
   _ <- Lib2.parseWord "save"
   return SaveCommand
-  
+
 parseStatements :: String -> Either String (Statements, String)
 parseStatements str = case parse statements str of
   (Left err, _) -> Left err
@@ -112,8 +112,8 @@ renderQuery Lib2.RemoveAllRequests = "remove_all_requests"
 renderQuery (Lib2.Operation _) = "operation"
 
 renderItems :: [String] -> String
-renderItems [] = "" 
-renderItems items = concatMap (\item -> "," ++ item) items
+renderItems [] = ""
+renderItems items = concatMap ("," ++) items
 
 renderStatements :: Statements -> String
 renderStatements (Single q) = renderQuery q
